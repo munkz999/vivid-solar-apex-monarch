@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Bag Chart",
+      "hasCanvas": false,
+      "bodyTextLen": 349,
+      "bodyTextHash": "bb20ce95169a08bd9a3e2162aa388fbaed685b40fe89919bb9fb0c864be1c2a3",
+      "bodyTextPrefix": "Bag Chart 95 mph · 12 clubs 100% 80% Senior 80 Light 88 Average ",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Bag Chart",
+      "hasCanvas": false,
+      "bodyTextLen": 349,
+      "bodyTextHash": "bb20ce95169a08bd9a3e2162aa388fbaed685b40fe89919bb9fb0c864be1c2a3",
+      "bodyTextPrefix": "Bag Chart 95 mph · 12 clubs 100% 80% Senior 80 Light 88 Average ",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}
