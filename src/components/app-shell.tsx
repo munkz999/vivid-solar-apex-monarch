@@ -1,9 +1,10 @@
-import { CloudSun, Crosshair, Flag, LayoutList, Briefcase, IdCard } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { CloudSun, Crosshair, Flag, LayoutList, Briefcase, IdCard, Lock } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { CLUBS } from "@/lib/clubs";
 import { currentMph, SPEED_PRESETS, useBagStore, type Gender, type TabId } from "@/lib/store";
+import { isProTab, setUnlock, useUnlock } from "@/lib/unlock";
 import { cn } from "@/lib/utils";
-import { Pill } from "./ui";
+import { GhostButton, Pill, PrimaryButton } from "./ui";
 import { ChartTab } from "./chart-tab";
 import { BagTab } from "./bag-tab";
 import { BenchmarkTab } from "./benchmark-tab";
@@ -19,6 +20,9 @@ const TABS: { id: TabId; label: string; icon: typeof LayoutList }[] = [
   { id: "card", label: "Card", icon: IdCard },
 ];
 
+const TAP_WINDOW_MS = 800;
+const DEV_TOAST_MS = 1600;
+
 export function AppShell() {
   const tab = useBagStore((s) => s.tab);
   const setTab = useBagStore((s) => s.setTab);
@@ -28,8 +32,13 @@ export function AppShell() {
   const setPreset = useBagStore((s) => s.setPreset);
   const mph = useBagStore(currentMph);
   const clubCount = useBagStore((s) => CLUBS.filter((c) => s.enabledClubs[c.id]).length);
-  const onFit = tab === "benchmark";
+  const unlocked = useUnlock();
+  const onFit = tab === "benchmark" && unlocked;
   const mainRef = useRef<HTMLElement>(null);
+  const tapCount = useRef(0);
+  const tapTimer = useRef<ReturnType<typeof window.setTimeout> | undefined>(undefined);
+  const [paywallFor, setPaywallFor] = useState<TabId | "fit" | null>(null);
+  const [devToast, setDevToast] = useState<string | null>(null);
 
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0 });
@@ -39,15 +48,67 @@ export function AppShell() {
     if (onFit && preset !== "fit") setPreset("fit");
   }, [onFit, preset, setPreset]);
 
+  useEffect(() => {
+    if (unlocked) return;
+    if (isProTab(tab)) {
+      setTab("chart");
+      setPaywallFor(null);
+    }
+    if (preset === "fit") setPreset("avg");
+  }, [unlocked, tab, preset, setTab, setPreset]);
+
+  useEffect(() => {
+    return () => {
+      if (tapTimer.current != null) window.clearTimeout(tapTimer.current);
+    };
+  }, []);
+
+  function requestTab(id: TabId) {
+    if (isProTab(id) && !unlocked) {
+      setPaywallFor(id);
+      return;
+    }
+    setPaywallFor(null);
+    setTab(id);
+  }
+
+  function confirmUnlock() {
+    setUnlock(true);
+    const next = paywallFor;
+    setPaywallFor(null);
+    if (next === "fit") setPreset("fit");
+    else if (next) setTab(next);
+  }
+
+  function onFlagTap() {
+    tapCount.current += 1;
+    window.clearTimeout(tapTimer.current);
+    tapTimer.current = window.setTimeout(() => {
+      tapCount.current = 0;
+    }, TAP_WINDOW_MS);
+    if (tapCount.current < 5) return;
+    tapCount.current = 0;
+    const next = !unlocked;
+    setUnlock(next);
+    setPaywallFor(null);
+    setDevToast(next ? "Pro on" : "Pro off");
+    window.setTimeout(() => setDevToast(null), DEV_TOAST_MS);
+  }
+
   return (
     <div className="h-dvh w-full overflow-hidden bg-bg print:h-auto print:overflow-visible">
-      <div className="mx-auto flex h-full min-h-0 w-full min-w-0 max-w-md flex-col bg-bg print:h-auto">
+      <div className="relative mx-auto flex h-full min-h-0 w-full min-w-0 max-w-md flex-col bg-bg print:h-auto">
         <header className="shrink-0 border-b border-line bg-bg px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 print:hidden">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-2.5">
-              <span className="flex size-9 items-center justify-center rounded-md bg-surface text-gold shadow-panel">
+              <button
+                type="button"
+                onClick={onFlagTap}
+                aria-label="Bag Chart"
+                className="flex size-9 items-center justify-center rounded-md bg-surface text-gold shadow-panel"
+              >
                 <Flag className="size-4" strokeWidth={2.2} />
-              </span>
+              </button>
               <div>
                 <h1 className="font-display text-xl leading-tight font-medium tracking-tight text-ink italic">
                   Bag Chart
@@ -81,14 +142,19 @@ export function AppShell() {
 
           <div className="mt-3 grid grid-cols-5 gap-1">
             {SPEED_PRESETS.map((p) => {
-              const locked = onFit && p.id !== "fit";
+              const fitLocked = p.id === "fit" && !unlocked;
+              const onFitLocked = onFit && p.id !== "fit";
               return (
                 <Pill
                   key={p.id}
-                  active={preset === p.id}
-                  disabled={locked}
+                  active={preset === p.id && !fitLocked}
+                  disabled={onFitLocked}
                   onClick={() => {
-                    if (locked) return;
+                    if (fitLocked) {
+                      setPaywallFor("fit");
+                      return;
+                    }
+                    if (onFitLocked) return;
                     setPreset(p.id);
                   }}
                   className="h-10 w-full min-w-0 px-1 text-xs"
@@ -106,8 +172,8 @@ export function AppShell() {
         >
           {tab === "chart" ? <ChartTab /> : null}
           {tab === "bag" ? <BagTab /> : null}
-          {tab === "benchmark" ? <BenchmarkTab /> : null}
-          {tab === "round" ? <RoundTab /> : null}
+          {tab === "benchmark" && unlocked ? <BenchmarkTab /> : null}
+          {tab === "round" && unlocked ? <RoundTab /> : null}
           {tab === "card" ? <CardTab /> : null}
         </main>
 
@@ -120,18 +186,29 @@ export function AppShell() {
             {TABS.map((t) => {
               const Icon = t.icon;
               const on = tab === t.id;
+              const locked = isProTab(t.id) && !unlocked;
               return (
                 <li key={t.id}>
                   <button
                     type="button"
-                    onClick={() => setTab(t.id)}
+                    onClick={() => requestTab(t.id)}
+                    aria-label={locked ? `${t.label}, locked` : t.label}
                     className={cn(
                       "flex h-14 w-full flex-col items-center justify-center gap-0.5 rounded-md",
                       "transition-colors duration-150 ease-out-smooth",
                       on ? "text-gold" : "text-faint",
                     )}
                   >
-                    <Icon className="size-5" strokeWidth={on ? 2.3 : 1.8} />
+                    <span className="relative">
+                      <Icon className="size-5" strokeWidth={on ? 2.3 : 1.8} />
+                      {locked ? (
+                        <Lock
+                          className="absolute -top-0.5 -right-2 size-2.5 text-gold"
+                          strokeWidth={2.6}
+                          aria-hidden
+                        />
+                      ) : null}
+                    </span>
                     <span className="text-2xs font-medium tracking-wide">{t.label}</span>
                   </button>
                 </li>
@@ -139,6 +216,49 @@ export function AppShell() {
             })}
           </ul>
         </nav>
+
+        {paywallFor ? (
+          <div
+            className="absolute inset-0 z-50 flex items-end bg-bg/80 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-sm print:hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pro-paywall-title"
+            onClick={() => setPaywallFor(null)}
+          >
+            <div
+              className="w-full rounded-xl bg-surface p-5 shadow-panel"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="text-2xs font-medium tracking-widest text-gold uppercase">One-time unlock</p>
+              <h2 id="pro-paywall-title" className="mt-1 font-display text-xl font-medium tracking-tight text-ink italic">
+                Fit and Round
+              </h2>
+              <p className="mt-3 text-sm leading-relaxed text-muted">
+                Fit speed on the chart, the Fit shot log, and Round stay locked until you unlock Pro.
+                It is a one-time purchase, not a subscription.
+              </p>
+              <p className="mt-3 text-sm leading-relaxed text-muted">
+                That unlock goes to support building Bag Chart: better fits, round tools, and the next
+                features.
+              </p>
+              <PrimaryButton className="mt-5" onClick={confirmUnlock}>
+                Unlock
+              </PrimaryButton>
+              <GhostButton className="mt-2 w-full" onClick={() => setPaywallFor(null)}>
+                Not now
+              </GhostButton>
+            </div>
+          </div>
+        ) : null}
+
+        {devToast ? (
+          <p
+            className="pointer-events-none absolute top-[max(0.75rem,env(safe-area-inset-top))] left-1/2 z-50 -translate-x-1/2 rounded-pill bg-gold px-3 py-1 text-2xs font-semibold text-gold-fg shadow-panel print:hidden"
+            role="status"
+          >
+            {devToast}
+          </p>
+        ) : null}
       </div>
     </div>
   );
