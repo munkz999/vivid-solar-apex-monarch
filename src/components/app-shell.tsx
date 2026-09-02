@@ -229,20 +229,20 @@ export function AppShell() {
               className="w-full rounded-xl bg-surface p-5 shadow-panel"
               onClick={(e) => e.stopPropagation()}
             >
-              <p className="text-2xs font-medium tracking-widest text-gold uppercase">One-time unlock</p>
+              <p className="text-2xs font-medium tracking-widest text-gold uppercase">$4.99 · one-time</p>
               <h2 id="pro-paywall-title" className="mt-1 font-display text-xl font-medium tracking-tight text-ink italic">
                 Fit and Round
               </h2>
               <p className="mt-3 text-sm leading-relaxed text-muted">
                 Fit speed on the chart, the Fit shot log, and Round stay locked until you unlock Pro.
-                It is a one-time purchase, not a subscription.
+                It is a one-time $4.99 purchase, not a subscription.
               </p>
               <p className="mt-3 text-sm leading-relaxed text-muted">
                 That unlock goes to support building Bag Chart: better fits, round tools, and the next
                 features.
               </p>
               <PrimaryButton className="mt-5" onClick={confirmUnlock}>
-                Unlock
+                Unlock · $4.99
               </PrimaryButton>
               <GhostButton className="mt-2 w-full" onClick={() => setPaywallFor(null)}>
                 Not now
