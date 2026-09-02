@@ -37,7 +37,7 @@ export function AppShell() {
   const mainRef = useRef<HTMLElement>(null);
   const tapCount = useRef(0);
   const tapTimer = useRef<ReturnType<typeof window.setTimeout> | undefined>(undefined);
-  const [paywallFor, setPaywallFor] = useState<TabId | null>(null);
+  const [paywallFor, setPaywallFor] = useState<TabId | "fit" | null>(null);
   const [devToast, setDevToast] = useState<string | null>(null);
 
   useEffect(() => {
@@ -49,10 +49,13 @@ export function AppShell() {
   }, [onFit, preset, setPreset]);
 
   useEffect(() => {
-    if (unlocked || !isProTab(tab)) return;
-    setTab("chart");
-    setPaywallFor(null);
-  }, [unlocked, tab, setTab]);
+    if (unlocked) return;
+    if (isProTab(tab)) {
+      setTab("chart");
+      setPaywallFor(null);
+    }
+    if (preset === "fit") setPreset("avg");
+  }, [unlocked, tab, preset, setTab, setPreset]);
 
   useEffect(() => {
     return () => {
@@ -73,7 +76,8 @@ export function AppShell() {
     setUnlock(true);
     const next = paywallFor;
     setPaywallFor(null);
-    if (next) setTab(next);
+    if (next === "fit") setPreset("fit");
+    else if (next) setTab(next);
   }
 
   function onFlagTap() {
@@ -138,14 +142,19 @@ export function AppShell() {
 
           <div className="mt-3 grid grid-cols-5 gap-1">
             {SPEED_PRESETS.map((p) => {
-              const locked = onFit && p.id !== "fit";
+              const fitLocked = p.id === "fit" && !unlocked;
+              const onFitLocked = onFit && p.id !== "fit";
               return (
                 <Pill
                   key={p.id}
-                  active={preset === p.id}
-                  disabled={locked}
+                  active={preset === p.id && !fitLocked}
+                  disabled={onFitLocked}
                   onClick={() => {
-                    if (locked) return;
+                    if (fitLocked) {
+                      setPaywallFor("fit");
+                      return;
+                    }
+                    if (onFitLocked) return;
                     setPreset(p.id);
                   }}
                   className="h-10 w-full min-w-0 px-1 text-xs"
@@ -220,10 +229,18 @@ export function AppShell() {
               className="w-full rounded-xl bg-surface p-5 shadow-panel"
               onClick={(e) => e.stopPropagation()}
             >
-              <h2 id="pro-paywall-title" className="font-display text-xl font-medium tracking-tight">
-                Round and Fit are Pro
+              <p className="text-2xs font-medium tracking-widest text-gold uppercase">One-time unlock</p>
+              <h2 id="pro-paywall-title" className="mt-1 font-display text-xl font-medium tracking-tight text-ink italic">
+                Fit and Round
               </h2>
-              <p className="mt-2 text-sm text-muted">One-time unlock.</p>
+              <p className="mt-3 text-sm leading-relaxed text-muted">
+                Fit speed on the chart, the Fit shot log, and Round stay locked until you unlock Pro.
+                It is a one-time purchase, not a subscription.
+              </p>
+              <p className="mt-3 text-sm leading-relaxed text-muted">
+                That unlock goes to support building Bag Chart: better fits, round tools, and the next
+                features.
+              </p>
               <PrimaryButton className="mt-5" onClick={confirmUnlock}>
                 Unlock
               </PrimaryButton>
