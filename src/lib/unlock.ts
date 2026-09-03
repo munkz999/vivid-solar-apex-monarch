@@ -1,7 +1,7 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
-/** Swap this storage for StoreKit / RevenueCat later. */
 export const UNLOCK_STORAGE_KEY = "bagchart.pro";
+export const IAP_PRODUCT_ID = "com.texastyler.bagchart.pro";
 
 const PRO_TAB_IDS = new Set(["benchmark", "round"]);
 
@@ -14,6 +14,26 @@ function emit() {
 
 export function isProTab(tab: string) {
   return PRO_TAB_IDS.has(tab);
+}
+
+function nativeBridge(): { postMessage: (msg: string) => void } | undefined {
+  if (typeof window === "undefined") return undefined;
+  return (window as unknown as { ReactNativeWebView?: { postMessage: (msg: string) => void } })
+    .ReactNativeWebView;
+}
+
+export function requestNativePurchase() {
+  const bridge = nativeBridge();
+  if (!bridge) return false;
+  bridge.postMessage(JSON.stringify({ type: "purchase", productId: IAP_PRODUCT_ID }));
+  return true;
+}
+
+export function requestNativeRestore() {
+  const bridge = nativeBridge();
+  if (!bridge) return false;
+  bridge.postMessage(JSON.stringify({ type: "restore" }));
+  return true;
 }
 
 export function hasUnlock(): boolean {
@@ -48,7 +68,28 @@ export function subscribeUnlock(onStoreChange: () => void) {
   };
 }
 
-/** One source of truth for the local Pro flag. */
 export function useUnlock() {
   return useSyncExternalStore(subscribeUnlock, hasUnlock, () => false);
+}
+
+/** Native IAP posts bagchart-iap messages into this page after a successful buy/restore. */
+export function useNativeUnlockListener() {
+  useEffect(() => {
+    function onMsg(ev: MessageEvent | Event) {
+      const data = "data" in ev ? (ev as MessageEvent).data : undefined;
+      let parsed: { type?: string } | null = null;
+      try {
+        parsed = typeof data === "string" ? JSON.parse(data) : data;
+      } catch {
+        return;
+      }
+      if (parsed?.type === "unlocked") setUnlock(true);
+    }
+    window.addEventListener("message", onMsg);
+    document.addEventListener("message", onMsg as EventListener);
+    return () => {
+      window.removeEventListener("message", onMsg);
+      document.removeEventListener("message", onMsg as EventListener);
+    };
+  }, []);
 }
