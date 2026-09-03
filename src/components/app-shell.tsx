@@ -2,7 +2,7 @@ import { CloudSun, Crosshair, Flag, LayoutList, Briefcase, IdCard, Lock } from "
 import { useEffect, useRef, useState } from "react";
 import { CLUBS } from "@/lib/clubs";
 import { currentMph, SPEED_PRESETS, useBagStore, type Gender, type TabId } from "@/lib/store";
-import { isProTab, setUnlock, useUnlock } from "@/lib/unlock";
+import { isProTab, requestNativePurchase, requestNativeRestore, setUnlock, useNativeUnlockListener, useUnlock } from "@/lib/unlock";
 import { cn } from "@/lib/utils";
 import { GhostButton, Pill, PrimaryButton } from "./ui";
 import { ChartTab } from "./chart-tab";
@@ -33,6 +33,7 @@ export function AppShell() {
   const mph = useBagStore(currentMph);
   const clubCount = useBagStore((s) => CLUBS.filter((c) => s.enabledClubs[c.id]).length);
   const unlocked = useUnlock();
+  useNativeUnlockListener();
   const onFit = tab === "benchmark" && unlocked;
   const mainRef = useRef<HTMLElement>(null);
   const tapCount = useRef(0);
@@ -73,6 +74,7 @@ export function AppShell() {
   }
 
   function confirmUnlock() {
+    if (requestNativePurchase()) return;
     setUnlock(true);
     const next = paywallFor;
     setPaywallFor(null);
@@ -247,6 +249,15 @@ export function AppShell() {
               <GhostButton className="mt-2 w-full" onClick={() => setPaywallFor(null)}>
                 Not now
               </GhostButton>
+              <button
+                type="button"
+                className="mt-3 w-full text-center text-xs text-faint"
+                onClick={() => {
+                  if (!requestNativeRestore()) setUnlock(true);
+                }}
+              >
+                Restore purchase
+              </button>
             </div>
           </div>
         ) : null}
