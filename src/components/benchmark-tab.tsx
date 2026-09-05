@@ -6,7 +6,7 @@ import {
   resolveBagClub,
 } from "@/lib/clubs";
 import { clubRoll, modelCarryRaw, weatherMultiplier, type ConditionsInput } from "@/lib/model";
-import { buildChart, chartSections, fmtYd, roundConditions } from "@/lib/chart";
+import { buildChart, fmtYd, roundConditions } from "@/lib/chart";
 import { currentMph, isDirectShot, useBagStore } from "@/lib/store";
 import { playCupDrop } from "@/lib/cup-drop";
 import { cn } from "@/lib/utils";
@@ -520,48 +520,34 @@ export function BenchmarkTab() {
             Turn on clubs in Bag to see distances.
           </p>
         ) : (
-          <div className="overflow-hidden rounded-xl bg-surface shadow-panel">
-            {chartSections(compactChart).map((section, si) => (
-              <div key={section.id}>
-                <h4
-                  className={cn(
-                    "px-3 pt-2.5 pb-1 text-2xs font-medium tracking-widest text-faint uppercase",
-                    si > 0 && "border-t border-line",
-                  )}
-                >
-                  {section.label}
-                </h4>
-                <ul>
-                  {section.rows.map((row, i) => (
-                    <li
-                      key={row.clubId}
-                      className={cn(
-                        "grid grid-cols-[minmax(0,1fr)_3.25rem_3.25rem] items-center gap-2 px-3 py-2.5",
-                        i < section.rows.length - 1 && "border-b border-line",
-                      )}
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-semibold tracking-tight">{row.label}</span>
-                          {row.isYours ? (
-                            <span className="text-2xs font-semibold tracking-wide text-gold uppercase">
-                              Yours
-                            </span>
-                          ) : null}
-                        </div>
-                      </div>
-                      <span className="text-right text-base font-semibold text-gold tabular-nums">
-                        {fmtYd(row.carry)}
+          <ul className="overflow-hidden rounded-xl bg-surface shadow-panel">
+            {compactChart.map((row, i) => (
+              <li
+                key={row.clubId}
+                className={cn(
+                  "grid grid-cols-[minmax(0,1fr)_3.25rem_3.25rem] items-center gap-2 px-3 py-2.5",
+                  i < compactChart.length - 1 && "border-b border-line",
+                )}
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold tracking-tight">{row.label}</span>
+                    {row.isYours ? (
+                      <span className="text-2xs font-semibold tracking-wide text-gold uppercase">
+                        Yours
                       </span>
-                      <span className="text-right text-base font-semibold tabular-nums">
-                        {fmtYd(row.total)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+                    ) : null}
+                  </div>
+                </div>
+                <span className="text-right text-base font-semibold text-gold tabular-nums">
+                  {fmtYd(row.carry)}
+                </span>
+                <span className="text-right text-base font-semibold tabular-nums">
+                  {fmtYd(row.total)}
+                </span>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
       </section>
 
