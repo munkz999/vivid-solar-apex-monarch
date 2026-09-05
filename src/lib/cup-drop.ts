@@ -1,6 +1,8 @@
-/** Short golf cup-drop foley for successful Log saves.
- * Audio: public/assets/cup-drop.{mp3,ogg} — original synthesized foley (CC0).
- * Not from broadcast/TV/game libraries.
+/** Short golf cup-drop for successful Log saves.
+ * Audio: public/assets/cup-drop.{mp3,ogg} — CC0 field recording from Freesound
+ * “golf_putting.wav” by inbeeld (sound id 21878): golf ball into hole at ~1 m.
+ * HQ preview normalized + short fade; not synthesized foley / not from broadcast libraries.
+ * License: CC0 (public domain); attribution not required — credit kept here for provenance.
  */
 let cached: HTMLAudioElement | null = null;
 
