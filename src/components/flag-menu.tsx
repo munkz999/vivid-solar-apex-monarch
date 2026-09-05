@@ -148,11 +148,31 @@ function InstructionsBody() {
       <section>
         <h3 className="font-medium text-ink">Swing speed presets</h3>
         <p className="mt-1">
-          <span className="text-ink">Sr</span>, <span className="text-ink">High</span>{" "}
-          (high handicap), <span className="text-ink">Mid</span>, and{" "}
-          <span className="text-ink">Low</span> (low handicap) are stock templates. They never change
-          from your logged shots.
+          Stock starting templates by typical distance — not a certified WHS handicap lookup. They
+          never change from your logged shots.
         </p>
+        <ul className="mt-1.5 list-disc space-y-1.5 pl-5">
+          <li>
+            <span className="text-ink">High</span> — higher-handicap players, roughly index{" "}
+            <span className="text-ink">18+</span>. Preset driver ~85 mph men / ~70 mph women.
+          </li>
+          <li>
+            <span className="text-ink">Mid</span> — middle of the pack, roughly{" "}
+            <span className="text-ink">8–17</span>. Preset ~93 men / ~78 women.
+          </li>
+          <li>
+            <span className="text-ink">Low</span> — stronger ball-strikers / lower handicaps, roughly{" "}
+            <span className="text-ink">0–7</span>. Tour-leaning template (~118 men / ~96 women); once
+            Pro is unlocked, <span className="text-ink">Custom</span> is the better fit.
+          </li>
+          <li>
+            <span className="text-ink">Sr</span> — senior / older-swinger template (not a handicap
+            band).
+          </li>
+          <li>
+            <span className="text-ink">Custom</span> — Pro; built from your Log shots.
+          </li>
+        </ul>
       </section>
       <section>
         <h3 className="font-medium text-ink">Pro · Custom chart</h3>
@@ -232,8 +252,12 @@ function FaqBody() {
       a: "A one-time unlock for Custom speed, Log, and Conditions. Use Restore purchase on the paywall if you already bought it on this Apple ID.",
     },
     {
+      q: "What do High / Mid / Low mean?",
+      a: "Rough handicap-index bands for the stock speed templates — not a certified WHS lookup. High ≈ 18+ (men ~85 mph / women ~70 mph). Mid ≈ 8–17 (~93 / ~78). Low ≈ 0–7, a tour-leaning fast template (~118 / ~96); use Custom once Pro is unlocked. Sr is a senior / older-swinger template, not a handicap band. Custom (Pro) is built from your Log shots.",
+    },
+    {
       q: "Custom vs Sr / High / Mid / Low?",
-      a: "Presets are stock templates. Custom is your fitted chart from entered speed and logged shots; presets stay unchanged.",
+      a: "Presets are stock distance templates (see High / Mid / Low above). Custom is your fitted chart from entered speed and logged shots; presets stay unchanged.",
     },
     {
       q: "Hold vs Overwrite on Whole chart?",
