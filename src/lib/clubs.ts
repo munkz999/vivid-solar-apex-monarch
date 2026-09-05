@@ -21,11 +21,35 @@ export type ClubId =
 
 export type ClubGroup = "woods" | "hybrids" | "irons" | "wedges";
 
+/** User-facing category when adding a custom club in Log. */
+export type CustomClubCategory = "driver" | "wood" | "hybrid" | "iron" | "wedges";
+
 export interface Club {
   id: ClubId;
   name: string;
   fullName: string;
   group: ClubGroup;
+  defaultOn: boolean;
+}
+
+export interface CustomClub {
+  id: string;
+  name: string;
+  fullName: string;
+  category: CustomClubCategory;
+  group: ClubGroup;
+  /** Stock club used for model carry / roll. */
+  modelClubId: ClubId;
+}
+
+/** Unified bag entry used by chart, log, and bag UI. */
+export interface BagClub {
+  id: string;
+  name: string;
+  fullName: string;
+  group: ClubGroup;
+  modelClubId: ClubId;
+  isCustom: boolean;
   defaultOn: boolean;
 }
 
@@ -62,6 +86,19 @@ export const GROUPS: { id: ClubGroup; label: string }[] = [
   { id: "wedges", label: "Wedges" },
 ];
 
+export const CUSTOM_CATEGORIES: {
+  id: CustomClubCategory;
+  label: string;
+  group: ClubGroup;
+  modelClubId: ClubId;
+}[] = [
+  { id: "driver", label: "Driver", group: "woods", modelClubId: "dr" },
+  { id: "wood", label: "Wood", group: "woods", modelClubId: "5w" },
+  { id: "hybrid", label: "Hybrid", group: "hybrids", modelClubId: "4h" },
+  { id: "iron", label: "Iron", group: "irons", modelClubId: "7i" },
+  { id: "wedges", label: "Wedges", group: "wedges", modelClubId: "pw" },
+];
+
 export const DEFAULT_ENABLED: Record<ClubId, boolean> = Object.fromEntries(
   CLUBS.map((c) => [c.id, c.defaultOn]),
 ) as Record<ClubId, boolean>;
@@ -71,3 +108,73 @@ export const DRIVER_LOFTS = [
 ] as const;
 
 export const DEFAULT_LOFT = 10.5;
+
+const STOCK_IDS = new Set<string>(CLUBS.map((c) => c.id));
+
+export function isStockClubId(id: string): id is ClubId {
+  return STOCK_IDS.has(id);
+}
+
+export function newCustomClubId() {
+  return `cx_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
+export function stockAsBagClub(c: Club): BagClub {
+  return {
+    id: c.id,
+    name: c.name,
+    fullName: c.fullName,
+    group: c.group,
+    modelClubId: c.id,
+    isCustom: false,
+    defaultOn: c.defaultOn,
+  };
+}
+
+export function customAsBagClub(c: CustomClub): BagClub {
+  return {
+    id: c.id,
+    name: c.name,
+    fullName: c.fullName,
+    group: c.group,
+    modelClubId: c.modelClubId,
+    isCustom: true,
+    defaultOn: true,
+  };
+}
+
+/** Stock clubs in order, with custom clubs appended after their group. */
+export function bagClubList(customClubs: CustomClub[] = []): BagClub[] {
+  const out: BagClub[] = [];
+  for (const g of GROUPS) {
+    for (const c of CLUBS.filter((x) => x.group === g.id)) {
+      out.push(stockAsBagClub(c));
+    }
+    for (const c of customClubs.filter((x) => x.group === g.id)) {
+      out.push(customAsBagClub(c));
+    }
+  }
+  return out;
+}
+
+export function resolveBagClub(id: string, customClubs: CustomClub[] = []): BagClub | undefined {
+  if (isStockClubId(id)) return stockAsBagClub(CLUB_BY_ID[id]);
+  const custom = customClubs.find((c) => c.id === id);
+  return custom ? customAsBagClub(custom) : undefined;
+}
+
+export function modelClubIdFor(id: string, customClubs: CustomClub[] = []): ClubId {
+  const club = resolveBagClub(id, customClubs);
+  if (club) return club.modelClubId;
+  if (isStockClubId(id)) return id;
+  return "7i";
+}
+
+export function shortClubLabel(id: string, loft: number, customClubs: CustomClub[] = []): string {
+  if (id === "dr") {
+    const t = loft.toFixed(1);
+    const loftTxt = t.endsWith(".0") ? t.slice(0, -2) : t;
+    return `Dr ${loftTxt}°`;
+  }
+  return resolveBagClub(id, customClubs)?.name ?? id;
+}

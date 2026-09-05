@@ -1,6 +1,17 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { CLUBS, DEFAULT_ENABLED, DEFAULT_LOFT, type ClubId } from "./clubs";
+import {
+  bagClubList,
+  DEFAULT_ENABLED,
+  DEFAULT_LOFT,
+  modelClubIdFor,
+  newCustomClubId,
+  resolveBagClub,
+  CUSTOM_CATEGORIES,
+  type ClubId,
+  type CustomClub,
+  type CustomClubCategory,
+} from "./clubs";
 import { clubRoll, fittedMph, modelCarryRaw, type WindDir } from "./model";
 
 export type TabId = "chart" | "bag" | "benchmark" | "round";
@@ -25,7 +36,7 @@ export const PRESET_MPH: Record<Gender, Record<Exclude<SpeedPreset, "fit">, numb
 
 export interface Benchmark {
   id: string;
-  clubId: ClubId;
+  clubId: string;
   carry: number;
   total?: number;
   clubSpeed?: number;
@@ -34,7 +45,7 @@ export interface Benchmark {
   savedAt: number;
   driverMph: number;
   kind?: ShotKind;
-  fromClubId?: ClubId;
+  fromClubId?: string;
   batchId?: string;
 }
 
@@ -53,19 +64,17 @@ export interface WeatherState {
 export type ShotInput = Omit<Benchmark, "id" | "savedAt" | "kind" | "fromClubId" | "batchId">;
 export type AdjustMode = "single" | "chart";
 export interface FitDraft {
-  clubId: ClubId;
+  clubId: string;
   carry: string;
   total: string;
 }
-
-/** Per-club absolute yards (standard air) from Log up/down nudges. Chart respects these. */
-export type ManualClubYards = Partial<Record<ClubId, { carry: number; total: number }>>;
 
 interface BagState {
   tab: TabId;
   speedPreset: SpeedPreset;
   gender: Gender;
-  enabledClubs: Record<ClubId, boolean>;
+  enabledClubs: Record<string, boolean>;
+  customClubs: CustomClub[];
   driverLoft: number;
   benchmarks: Benchmark[];
   useConditions: boolean;
@@ -77,12 +86,17 @@ interface BagState {
   fitHistory: Benchmark[][];
   fitDraft: FitDraft;
   manualMph: number | null;
-  manualClubYards: ManualClubYards;
   setTab: (tab: TabId) => void;
   setPreset: (preset: SpeedPreset) => void;
   setGender: (gender: Gender) => void;
-  toggleClub: (id: ClubId) => void;
+  toggleClub: (id: string) => void;
   setDriverLoft: (loft: number) => void;
+  addCustomClub: (input: {
+    name: string;
+    fullName?: string;
+    category: CustomClubCategory;
+  }) => CustomClub | null;
+  removeCustomClub: (id: string) => void;
   logShot: (
     b: ShotInput,
     opts: { wholeChart: boolean; overwrite: boolean },
@@ -99,8 +113,6 @@ interface BagState {
   setOverwriteBelow: (on: boolean) => void;
   setFitDraft: (p: Partial<FitDraft>) => void;
   applyManualMph: (mph: number) => void;
-  setManualClubYards: (clubId: ClubId, yards: { carry: number; total: number }) => void;
-  clearManualClubYards: (clubId?: ClubId) => void;
 }
 
 export function clampMph(n: number) {
@@ -129,6 +141,10 @@ function pushHistory(current: Benchmark[][], snapshot: Benchmark[]) {
   return [cloneShots(snapshot), ...current].slice(0, HISTORY_MAX);
 }
 
+function normalizeClubName(raw: string) {
+  return raw.trim().replace(/\s+/g, " ").slice(0, 24);
+}
+
 const persistStorage = createJSONStorage(() => {
   if (typeof window === "undefined") {
     return {
@@ -147,6 +163,7 @@ export const useBagStore = create<BagState>()(
       speedPreset: "avg",
       gender: "men",
       enabledClubs: { ...DEFAULT_ENABLED },
+      customClubs: [],
       driverLoft: DEFAULT_LOFT,
       benchmarks: [],
       useConditions: false,
@@ -158,13 +175,49 @@ export const useBagStore = create<BagState>()(
       fitHistory: [],
       fitDraft: { clubId: "dr", carry: "", total: "" },
       manualMph: null,
-      manualClubYards: {},
       setTab: (tab) => set({ tab }),
       setPreset: (preset) => set({ speedPreset: preset }),
       setGender: (gender) => set({ gender }),
       toggleClub: (id) =>
         set({ enabledClubs: { ...get().enabledClubs, [id]: !get().enabledClubs[id] } }),
       setDriverLoft: (loft) => set({ driverLoft: loft }),
+      addCustomClub: ({ name, fullName, category }) => {
+        const cat = CUSTOM_CATEGORIES.find((c) => c.id === category);
+        if (!cat) return null;
+        const short = normalizeClubName(name);
+        if (!short) return null;
+        const long = normalizeClubName(fullName ?? short) || short;
+        const club: CustomClub = {
+          id: newCustomClubId(),
+          name: short,
+          fullName: long,
+          category: cat.id,
+          group: cat.group,
+          modelClubId: cat.modelClubId,
+        };
+        const state = get();
+        set({
+          customClubs: [...state.customClubs, club],
+          enabledClubs: { ...state.enabledClubs, [club.id]: true },
+          fitDraft: { ...state.fitDraft, clubId: club.id, carry: "", total: "" },
+        });
+        return club;
+      },
+      removeCustomClub: (id) => {
+        const state = get();
+        const enabledClubs = { ...state.enabledClubs };
+        delete enabledClubs[id];
+        const nextDraft =
+          state.fitDraft.clubId === id
+            ? { ...state.fitDraft, clubId: "dr", carry: "", total: "" }
+            : state.fitDraft;
+        set({
+          customClubs: state.customClubs.filter((c) => c.id !== id),
+          enabledClubs,
+          benchmarks: state.benchmarks.filter((b) => b.clubId !== id && b.fromClubId !== id),
+          fitDraft: nextDraft,
+        });
+      },
       logShot: (b, opts) => {
         const state = get();
         const id = newId();
@@ -177,18 +230,20 @@ export const useBagStore = create<BagState>()(
         const cascades: Benchmark[] = [];
         let held = 0;
         let overwritten = 0;
+        const ordered = bagClubList(state.customClubs);
         if (opts.wholeChart) {
           const loft = state.driverLoft;
-          const modelSrc = modelCarryRaw(b.clubId, b.driverMph, loft);
+          const srcModel = modelClubIdFor(b.clubId, state.customClubs);
+          const modelSrc = modelCarryRaw(srcModel, b.driverMph, loft);
           const raw = modelSrc === 0 ? 1 : b.carry / modelSrc;
           const scale = Math.min(CASCADE_MAX, Math.max(CASCADE_MIN, raw));
-          const srcRoll = clubRoll(b.clubId, loft);
+          const srcRoll = clubRoll(srcModel, loft);
           const loggedRoll = Math.max(0, (b.total ?? b.carry + srcRoll) - b.carry);
           const rollScale =
             srcRoll <= 0 ? 1 : Math.min(ROLL_MAX, Math.max(ROLL_MIN, loggedRoll / srcRoll));
-          const idx = CLUBS.findIndex((c) => c.id === b.clubId);
-          const below = CLUBS.slice(idx + 1).filter((c) => state.enabledClubs[c.id]);
-          const srcName = CLUBS.find((x) => x.id === b.clubId)?.name ?? b.clubId;
+          const idx = ordered.findIndex((c) => c.id === b.clubId);
+          const below = ordered.slice(idx + 1).filter((c) => state.enabledClubs[c.id]);
+          const srcName = resolveBagClub(b.clubId, state.customClubs)?.name ?? b.clubId;
           for (const c of below) {
             const hasDirect = rest.some((x) => x.clubId === c.id && isDirectShot(x));
             if (hasDirect && !opts.overwrite) {
@@ -199,8 +254,8 @@ export const useBagStore = create<BagState>()(
               overwritten += 1;
               rest = rest.filter((x) => x.clubId !== c.id);
             }
-            const cCarry = modelCarryRaw(c.id, b.driverMph, loft) * scale;
-            const cRoll = clubRoll(c.id, loft) * rollScale;
+            const cCarry = modelCarryRaw(c.modelClubId, b.driverMph, loft) * scale;
+            const cRoll = clubRoll(c.modelClubId, loft) * rollScale;
             cascades.push({
               id: newId(),
               clubId: c.id,
@@ -217,10 +272,7 @@ export const useBagStore = create<BagState>()(
           const hit = new Set(cascades.map((x) => x.clubId));
           rest = rest.filter((x) => !(x.kind === "cascade" && hit.has(x.clubId)));
         }
-        const manualClubYards = { ...state.manualClubYards };
-        delete manualClubYards[b.clubId];
-        for (const c of cascades) delete manualClubYards[c.clubId];
-        set({ benchmarks: [shot, ...cascades, ...rest], fitHistory: history, manualClubYards });
+        set({ benchmarks: [shot, ...cascades, ...rest], fitHistory: history });
         return { cascaded: cascades.length, held, overwritten };
       },
       revertFit: () => {
@@ -247,7 +299,6 @@ export const useBagStore = create<BagState>()(
           fitHistory: pushHistory(get().fitHistory, get().benchmarks),
           benchmarks: [],
           manualMph: null,
-          manualClubYards: {},
           fitDraft: { ...get().fitDraft, carry: "", total: "" },
         }),
       setUseConditions: (on) => set({ useConditions: on }),
@@ -279,31 +330,11 @@ export const useBagStore = create<BagState>()(
             fitHistory: pushHistory(state.fitHistory, state.benchmarks),
             benchmarks: [],
             manualMph: mph,
-            manualClubYards: {},
             fitDraft: { ...state.fitDraft, carry: "", total: "" },
           });
           return;
         }
         set({ manualMph: mph });
-      },
-      setManualClubYards: (clubId, yards) => {
-        const carry = Math.min(450, Math.max(1, Math.round(yards.carry)));
-        const total = Math.min(500, Math.max(carry, Math.round(yards.total)));
-        set({
-          manualClubYards: {
-            ...get().manualClubYards,
-            [clubId]: { carry, total },
-          },
-        });
-      },
-      clearManualClubYards: (clubId) => {
-        if (!clubId) {
-          set({ manualClubYards: {} });
-          return;
-        }
-        const next = { ...get().manualClubYards };
-        delete next[clubId];
-        set({ manualClubYards: next });
       },
     }),
     {
@@ -314,6 +345,7 @@ export const useBagStore = create<BagState>()(
         speedPreset: s.speedPreset,
         gender: s.gender,
         enabledClubs: s.enabledClubs,
+        customClubs: s.customClubs,
         driverLoft: s.driverLoft,
         benchmarks: s.benchmarks,
         useConditions: s.useConditions,
@@ -325,9 +357,8 @@ export const useBagStore = create<BagState>()(
         fitHistory: s.fitHistory,
         fitDraft: s.fitDraft,
         manualMph: s.manualMph,
-        manualClubYards: s.manualClubYards,
       }),
-      version: 5,
+      version: 6,
       migrate: (persisted, version) => {
         const s = persisted as Record<string, unknown>;
         if (version < 2) {
@@ -362,9 +393,10 @@ export const useBagStore = create<BagState>()(
         }
         if (version < 5) {
           if (s.tab === "card") s.tab = "chart";
-          if (s.manualClubYards == null || typeof s.manualClubYards !== "object") {
-            s.manualClubYards = {};
-          }
+        }
+        if (version < 6) {
+          delete s.manualClubYards;
+          if (!Array.isArray(s.customClubs)) s.customClubs = [];
         }
         return s;
       },
@@ -378,9 +410,15 @@ export function currentMph(s: {
   driverLoft: number;
   benchmarks: Benchmark[];
   manualMph?: number | null;
+  customClubs?: CustomClub[];
 }): number {
   if (s.speedPreset === "fit") {
-    return fittedMph(s.benchmarks, s.driverLoft) ?? s.manualMph ?? PRESET_MPH[s.gender].avg;
+    const customs = s.customClubs ?? [];
+    return (
+      fittedMph(s.benchmarks, s.driverLoft, (id) => modelClubIdFor(id, customs)) ??
+      s.manualMph ??
+      PRESET_MPH[s.gender].avg
+    );
   }
   return PRESET_MPH[s.gender][s.speedPreset];
 }
@@ -389,6 +427,9 @@ export function presetLabel(id: SpeedPreset) {
   return SPEED_PRESETS.find((p) => p.id === id)?.label ?? id;
 }
 
-export function shotsForClub(benchmarks: Benchmark[], clubId: ClubId): Benchmark[] {
+export function shotsForClub(benchmarks: Benchmark[], clubId: string): Benchmark[] {
   return benchmarks.filter((b) => b.clubId === clubId);
 }
+
+// Re-export ClubId for callers that still need stock typing.
+export type { ClubId };

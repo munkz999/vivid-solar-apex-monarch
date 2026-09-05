@@ -63,7 +63,7 @@ export interface ConditionsInput {
 }
 
 export interface BenchmarkShot {
-  clubId: ClubId;
+  clubId: string;
   carry: number;
   driverMph: number;
   total?: number;
@@ -131,7 +131,7 @@ export function weatherMultiplier(c: ConditionsInput): number {
 }
 
 export interface Yardage {
-  clubId: ClubId;
+  clubId: string;
   carry: number;
   total: number;
   modelCarry: number;
@@ -160,19 +160,21 @@ export function appliedRoll(
 
 export function blendedYours(
   shots: BenchmarkShot[],
-  clubId: ClubId,
+  clubId: string,
   mph: number,
   loft: number,
   lockSpeed = false,
+  modelId?: ClubId,
 ): { carry: number; roll: number | null; count: number } | null {
   const clubShots = shots.filter((s) => s.clubId === clubId);
   if (clubShots.length === 0) return null;
-  const modelNow = modelCarryRaw(clubId, mph, loft);
+  const mid = modelId ?? (clubId as ClubId);
+  const modelNow = modelCarryRaw(mid, mph, loft);
   let sum = 0;
   let rollSum = 0;
   let rollN = 0;
   for (const s of clubShots) {
-    const modelThen = modelCarryRaw(clubId, s.driverMph, loft);
+    const modelThen = modelCarryRaw(mid, s.driverMph, loft);
     const scale = lockSpeed || modelThen === 0 ? 1 : modelNow / modelThen;
     sum += s.carry * scale;
     const rawRoll =
@@ -194,20 +196,22 @@ export function blendedYours(
 }
 
 export function computeYardage(opts: {
-  clubId: ClubId;
+  clubId: string;
   mph: number;
   loft: number;
   effort: Effort;
   conditions: ConditionsInput | null;
   benchmark: BenchmarkShot | null;
+  modelClubId?: ClubId;
 }): Yardage {
   const { clubId, mph, loft, effort, conditions, benchmark } = opts;
-  const modelAtMph = modelCarryRaw(clubId, mph, loft);
+  const mid = opts.modelClubId ?? (clubId as ClubId);
+  const modelAtMph = modelCarryRaw(mid, mph, loft);
 
   let yoursRaw: number | null = null;
   let yoursRollRaw: number | null = null;
   if (benchmark) {
-    const modelAtSave = modelCarryRaw(clubId, benchmark.driverMph, loft);
+    const modelAtSave = modelCarryRaw(mid, benchmark.driverMph, loft);
     const scale = modelAtSave === 0 ? 1 : modelAtMph / modelAtSave;
     yoursRaw = benchmark.carry * scale;
     if (benchmark.roll != null) yoursRollRaw = benchmark.roll;
@@ -220,7 +224,7 @@ export function computeYardage(opts: {
 
   const carry = baseRaw * effortScale * wxScale;
   const modelCarry = modelAtMph * effortScale * wxScale;
-  const roll = appliedRoll(clubId, loft, effort, conditions, yoursRollRaw);
+  const roll = appliedRoll(mid, loft, effort, conditions, yoursRollRaw);
 
   const vsModel = yoursRaw === null ? null : yoursRaw - modelAtMph;
 
@@ -255,10 +259,11 @@ export function impliedMph(clubId: ClubId, carry: number, loft: number): number 
 export function fittedMph(
   shots: Array<BenchmarkShot & { kind?: string }>,
   loft: number,
+  resolveModelId?: (clubId: string) => ClubId,
 ): number | null {
   const direct = shots.filter((s) => s.kind !== "cascade");
   if (direct.length === 0) return null;
-  const byClub = new Map<ClubId, number[]>();
+  const byClub = new Map<string, number[]>();
   for (const s of direct) {
     const list = byClub.get(s.clubId) ?? [];
     list.push(s.carry);
@@ -267,7 +272,8 @@ export function fittedMph(
   let sum = 0;
   for (const [id, carries] of byClub) {
     const avg = carries.reduce((a, b) => a + b, 0) / carries.length;
-    sum += impliedMph(id, avg, loft);
+    const mid = resolveModelId ? resolveModelId(id) : (id as ClubId);
+    sum += impliedMph(mid, avg, loft);
   }
   return Math.round(sum / byClub.size);
 }

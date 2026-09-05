@@ -1,6 +1,6 @@
 import { CloudSun, Crosshair, Flag, LayoutList, Briefcase, Lock } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { CLUBS } from "@/lib/clubs";
+import { bagClubList } from "@/lib/clubs";
 import { currentMph, SPEED_PRESETS, useBagStore, type Gender, type TabId } from "@/lib/store";
 import { isProTab, requestNativePurchase, requestNativeRestore, setUnlock, useNativeUnlockListener, useUnlock } from "@/lib/unlock";
 import { cn } from "@/lib/utils";
@@ -29,7 +29,7 @@ export function AppShell() {
   const preset = useBagStore((s) => s.speedPreset);
   const setPreset = useBagStore((s) => s.setPreset);
   const mph = useBagStore(currentMph);
-  const clubCount = useBagStore((s) => CLUBS.filter((c) => s.enabledClubs[c.id]).length);
+  const clubCount = useBagStore((s) => bagClubList(s.customClubs).filter((c) => s.enabledClubs[c.id]).length);
   const unlocked = useUnlock();
   useNativeUnlockListener();
   const onFit = tab === "benchmark" && unlocked;

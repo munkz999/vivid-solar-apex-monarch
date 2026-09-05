@@ -1,4 +1,9 @@
-import { CLUBS, CLUB_BY_ID, type ClubId } from "./clubs";
+import {
+  bagClubList,
+  shortClubLabel,
+  type BagClub,
+  type CustomClub,
+} from "./clubs";
 import {
   blendedYours,
   computeYardage,
@@ -6,7 +11,7 @@ import {
   type Effort,
   type Yardage,
 } from "./model";
-import { isDirectShot, type Benchmark, type ManualClubYards } from "./store";
+import { isDirectShot, type Benchmark } from "./store";
 
 export function loftLabel(loft: number) {
   const t = loft.toFixed(1);
@@ -17,13 +22,13 @@ export function fmtYd(n: number) {
   return String(Math.round(n));
 }
 
-export type FitOrigin = "model" | "shots" | "cascade" | "manual";
+export type FitOrigin = "model" | "shots" | "cascade";
 
 export interface ChartRow extends Yardage {
   shotCount: number;
   label: string;
   fitOrigin: FitOrigin;
-  fromClubId?: ClubId;
+  fromClubId?: string;
 }
 
 export function roundConditions(opts: {
@@ -48,34 +53,25 @@ export function roundConditions(opts: {
 
 export function resolveYours(
   benchmarks: Benchmark[],
-  clubId: ClubId,
+  clubId: string,
   mph: number,
   loft: number,
   lockSpeed = false,
-  manual?: ManualClubYards[ClubId],
+  modelClubId?: BagClub["modelClubId"],
 ): {
   carry: number;
   roll: number | null;
   count: number;
   origin: Exclude<FitOrigin, "model">;
-  fromClubId?: ClubId;
+  fromClubId?: string;
 } | null {
-  // Manual Log nudges win while set (cleared when a shot is logged for the club).
-  if (manual) {
-    return {
-      carry: manual.carry,
-      roll: Math.max(0, manual.total - manual.carry),
-      count: 0,
-      origin: "manual",
-    };
-  }
   const direct = benchmarks.filter((b) => b.clubId === clubId && isDirectShot(b));
-  const blend = blendedYours(direct, clubId, mph, loft, lockSpeed);
+  const blend = blendedYours(direct, clubId, mph, loft, lockSpeed, modelClubId);
   if (blend) return { ...blend, origin: "shots" };
   const cascades = benchmarks.filter((b) => b.clubId === clubId && b.kind === "cascade");
   if (cascades.length === 0) return null;
   const latest = cascades.reduce((a, b) => (a.savedAt >= b.savedAt ? a : b));
-  const scaled = blendedYours([latest], clubId, mph, loft, lockSpeed);
+  const scaled = blendedYours([latest], clubId, mph, loft, lockSpeed, modelClubId);
   if (!scaled) return null;
   return {
     carry: scaled.carry,
@@ -87,25 +83,26 @@ export function resolveYours(
 }
 
 export function buildChart(opts: {
-  enabledClubs: Record<ClubId, boolean>;
+  enabledClubs: Record<string, boolean>;
   mph: number;
   loft: number;
   effort: Effort;
   conditions: ConditionsInput | null;
   benchmarks: Benchmark[];
   lockSpeed?: boolean;
-  manualClubYards?: ManualClubYards;
+  customClubs?: CustomClub[];
 }): ChartRow[] {
   const lockSpeed = opts.lockSpeed ?? false;
-  const manuals = opts.manualClubYards ?? {};
-  return CLUBS.filter((c) => opts.enabledClubs[c.id]).map((club) => {
+  const customs = opts.customClubs ?? [];
+  const clubs = bagClubList(customs).filter((c) => opts.enabledClubs[c.id]);
+  return clubs.map((club) => {
     const fit = resolveYours(
       opts.benchmarks,
       club.id,
       opts.mph,
       opts.loft,
       lockSpeed,
-      manuals[club.id],
+      club.modelClubId,
     );
     const row = computeYardage({
       clubId: club.id,
@@ -113,6 +110,7 @@ export function buildChart(opts: {
       loft: opts.loft,
       effort: opts.effort,
       conditions: opts.conditions,
+      modelClubId: club.modelClubId,
       benchmark: fit
         ? {
             clubId: club.id,
@@ -122,7 +120,7 @@ export function buildChart(opts: {
           }
         : null,
     });
-    const label = club.id === "dr" ? `Dr ${loftLabel(opts.loft)}°` : CLUB_BY_ID[club.id].name;
+    const label = shortClubLabel(club.id, opts.loft, customs);
     return {
       ...row,
       shotCount: fit?.count ?? 0,

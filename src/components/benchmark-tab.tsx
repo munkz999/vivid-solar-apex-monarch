@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { X } from "lucide-react";
-import { CLUB_BY_ID, CLUBS, type ClubId } from "@/lib/clubs";
+import { useEffect, useMemo, useState } from "react";
+import { Plus, X } from "lucide-react";
+import {
+  CUSTOM_CATEGORIES,
+  bagClubList,
+  resolveBagClub,
+  type CustomClubCategory,
+} from "@/lib/clubs";
 import { clubRoll, modelCarryRaw, weatherMultiplier, type ConditionsInput } from "@/lib/model";
 import { buildChart, fmtYd, roundConditions } from "@/lib/chart";
 import { currentMph, isDirectShot, useBagStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { Field, GhostButton, Pill, PrimaryButton, TextInput } from "./ui";
-
-const MANUAL_WARN =
-  "You are manually adjusting your club distance. If you wish to benchmark a club and have all clubs be adjusted for broader chart adjustment, you should log a shot and select overwrite/adjust instead.";
 
 function timeLabel(ts: number) {
   const d = new Date(ts);
@@ -28,8 +30,15 @@ function signed(n: number) {
   return `${r > 0 ? "+" : ""}${r}`;
 }
 
+function rangeLabel(clubs: { name: string }[]) {
+  if (clubs.length === 0) return "";
+  if (clubs.length === 1) return clubs[0].name;
+  return `${clubs[0].name}–${clubs[clubs.length - 1].name}`;
+}
+
 export function BenchmarkTab() {
   const enabled = useBagStore((s) => s.enabledClubs);
+  const customClubs = useBagStore((s) => s.customClubs);
   const mph = useBagStore(currentMph);
   const loft = useBagStore((s) => s.driverLoft);
   const logShot = useBagStore((s) => s.logShot);
@@ -50,22 +59,25 @@ export function BenchmarkTab() {
   const setFitDraft = useBagStore((s) => s.setFitDraft);
   const applyManualMph = useBagStore((s) => s.applyManualMph);
   const manualMph = useBagStore((s) => s.manualMph);
-  const manualClubYards = useBagStore((s) => s.manualClubYards);
-  const setManualClubYards = useBagStore((s) => s.setManualClubYards);
-  const setPreset = useBagStore((s) => s.setPreset);
+  const addCustomClub = useBagStore((s) => s.addCustomClub);
 
-  const inBag = useMemo(() => CLUBS.filter((c) => enabled[c.id]), [enabled]);
+  const inBag = useMemo(
+    () => bagClubList(customClubs).filter((c) => enabled[c.id]),
+    [customClubs, enabled],
+  );
   const [confirmClear, setConfirmClear] = useState(false);
   const [savedFlash, setSavedFlash] = useState<string | null>(null);
   const [speedEdit, setSpeedEdit] = useState<string | null>(null);
   const [pendingMph, setPendingMph] = useState<number | null>(null);
-  const [pendingNudge, setPendingNudge] = useState<{ clubId: ClubId; delta: number } | null>(null);
-  const warnedManual = useRef(false);
+  const [addingCustom, setAddingCustom] = useState(false);
+  const [customName, setCustomName] = useState("");
+  const [customCategory, setCustomCategory] = useState<CustomClubCategory>("iron");
 
   const clubId = draft.clubId;
   const carry = draft.carry;
   const total = draft.total;
   const activeClub = inBag.some((c) => c.id === clubId) ? clubId : (inBag[0]?.id ?? "dr");
+  const activeMeta = resolveBagClub(activeClub, customClubs);
   const carryN = Number(carry);
   const totalN = Number(total);
   const canSave =
@@ -108,8 +120,10 @@ export function BenchmarkTab() {
       total: shown.total != null ? String(shown.total) : "",
     });
   }, [activeClub]);
-  const modelCarry = modelCarryRaw(activeClub, mph, loft);
-  const modelTotal = modelCarry + clubRoll(activeClub, loft);
+
+  const modelId = activeMeta?.modelClubId ?? "dr";
+  const modelCarry = modelCarryRaw(modelId, mph, loft);
+  const modelTotal = modelCarry + clubRoll(modelId, loft);
   const shotCount = list.filter((b) => b.clubId === activeClub && isDirectShot(b)).length;
 
   const activeIdx = inBag.findIndex((c) => c.id === activeClub);
@@ -119,6 +133,7 @@ export function BenchmarkTab() {
     ? below
     : below.filter((c) => !heldClubs.some((h) => h.id === c.id));
   const wholeChart = adjustMode === "chart" && below.length > 0;
+  const belowRange = rangeLabel(below);
 
   const live =
     canSave && Number.isFinite(carryN)
@@ -190,35 +205,32 @@ export function BenchmarkTab() {
     conditions: fitConditions,
     benchmarks: list,
     lockSpeed: true,
-    manualClubYards,
+    customClubs,
   });
 
-  function applyNudge(clubId: ClubId, delta: number) {
-    const row = compactChart.find((r) => r.clubId === clubId);
-    if (!row) return;
-    const nextCarryShown = Math.round(row.carry) + delta;
-    if (nextCarryShown < 1 || nextCarryShown > 450) return;
-    const rollShown = Math.max(0, Math.round(row.total) - Math.round(row.carry));
-    const nextTotalShown = Math.min(500, nextCarryShown + rollShown);
-    const storedCarry = Math.round(nextCarryShown / wx);
-    const storedTotal = Math.round(storedCarry + rollShown / rollWx);
-    setManualClubYards(clubId, { carry: storedCarry, total: storedTotal });
-    setPreset("fit");
+  function onAddCustom() {
+    const club = addCustomClub({ name: customName, category: customCategory });
+    if (!club) return;
+    setCustomName("");
+    setAddingCustom(false);
+    setSavedFlash(`Added ${club.name}`);
+    window.setTimeout(() => setSavedFlash(null), 1600);
   }
 
-  function requestNudge(clubId: ClubId, delta: number) {
-    if (!warnedManual.current) {
-      setPendingNudge({ clubId, delta });
-      return;
+  function holdOverwriteCopy() {
+    if (adjustMode === "single") {
+      return `Only ${activeMeta?.name ?? activeClub} updates.`;
     }
-    applyNudge(clubId, delta);
-  }
-
-  function confirmNudge() {
-    if (!pendingNudge) return;
-    warnedManual.current = true;
-    applyNudge(pendingNudge.clubId, pendingNudge.delta);
-    setPendingNudge(null);
+    if (below.length === 0) {
+      return `Nothing below ${activeMeta?.name ?? activeClub} — this log is this club only.`;
+    }
+    if (overwriteBelow) {
+      return `Overwrite: clubs in ${belowRange} will have their custom shot data overwritten for full chart adjustment.`;
+    }
+    if (heldClubs.length) {
+      return `Hold: custom club shot information in ${belowRange} will not be modified (keeping ${heldClubs.map((c) => c.name).join(", ")}). Other clubs in that range still scale.`;
+    }
+    return `Hold: custom club shot information in ${belowRange} will not be modified. Clubs without logged shots in that range will scale.`;
   }
 
   return (
@@ -326,8 +338,56 @@ export function BenchmarkTab() {
                 {c.id === "dr" ? "Dr" : c.name}
               </Pill>
             ))}
+            <Pill
+              active={addingCustom}
+              onClick={() => setAddingCustom((v) => !v)}
+              aria-label="Add custom club"
+            >
+              <Plus className="mr-0.5 inline size-3.5" strokeWidth={2.4} />
+              Custom
+            </Pill>
           </div>
         </Field>
+
+        {addingCustom ? (
+          <div className="mt-4 rounded-lg bg-raised p-3 shadow-inset">
+            <Field label="Custom club name">
+              <TextInput
+                value={customName}
+                placeholder="e.g. DI, 2I, UW"
+                maxLength={24}
+                onChange={(e) => setCustomName(e.target.value)}
+              />
+            </Field>
+            <div className="mt-3">
+              <Field label="Category">
+                <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+                  {CUSTOM_CATEGORIES.map((cat) => (
+                    <Pill
+                      key={cat.id}
+                      active={customCategory === cat.id}
+                      onClick={() => setCustomCategory(cat.id)}
+                    >
+                      {cat.label}
+                    </Pill>
+                  ))}
+                </div>
+              </Field>
+            </div>
+            <p className="mt-2 text-xs text-muted">
+              Uses the {CUSTOM_CATEGORIES.find((c) => c.id === customCategory)?.label.toLowerCase()}{" "}
+              model for chart distances. Added clubs appear in Bag and on the Custom chart.
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <GhostButton className="w-full" onClick={() => setAddingCustom(false)}>
+                Cancel
+              </GhostButton>
+              <PrimaryButton disabled={!customName.trim()} onClick={onAddCustom}>
+                Add club
+              </PrimaryButton>
+            </div>
+          </div>
+        ) : null}
 
         <div className="mt-4 grid grid-cols-2 gap-3">
           <Field label="Carry (yd)">
@@ -409,22 +469,12 @@ export function BenchmarkTab() {
           </div>
         ) : null}
 
-        <p className="mt-3 text-xs text-muted">
-          {adjustMode === "single"
-            ? `Only ${CLUB_BY_ID[activeClub].name} updates.`
-            : below.length === 0
-              ? `Nothing below ${CLUB_BY_ID[activeClub].name} — this log is this club only.`
-              : overwriteBelow
-                ? `Scale ${below[0].name}–${below[below.length - 1].name} carry and roll vs model. Overwrite replaces logged shots below.`
-                : heldClubs.length
-                  ? `Scale carry and roll below. Hold keeps ${heldClubs.map((c) => c.name).join(", ")}.`
-                  : `Scale ${below[0].name}–${below[below.length - 1].name} carry and roll.`}
-        </p>
+        <p className="mt-3 text-xs text-muted">{holdOverwriteCopy()}</p>
 
         {wholeChart && live ? (
           <p className="mt-2 text-xs text-gold">
             {cascadeTargets.length} club{cascadeTargets.length === 1 ? "" : "s"} below scale{" "}
-            {signed(live.scalePct)}%
+            {signed(live.scalePct)}
             {!overwriteBelow && heldClubs.length ? ` · ${heldClubs.length} held` : ""}
             {overwriteBelow && heldClubs.length ? ` · ${heldClubs.length} overwritten` : ""}
           </p>
@@ -458,9 +508,10 @@ export function BenchmarkTab() {
         ) : (
           <ul className="overflow-hidden rounded-xl bg-surface shadow-panel">
             {logEntries.map((b, i) => {
-              const club = CLUB_BY_ID[b.clubId];
+              const club = resolveBagClub(b.clubId, customClubs);
               const shown = shownYards(b, wx, rollWx);
-              const modelThen = modelCarryRaw(b.clubId, b.driverMph, loft);
+              const mid = club?.modelClubId ?? "7i";
+              const modelThen = modelCarryRaw(mid, b.driverMph, loft);
               const vs = b.carry - modelThen;
               const roll = shown.total != null ? Math.max(0, shown.total - shown.carry) : null;
               const cascaded = list.filter(
@@ -476,7 +527,7 @@ export function BenchmarkTab() {
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold">{club.name}</span>
+                      <span className="font-semibold">{club?.name ?? b.clubId}</span>
                       <span className="text-2xs text-muted tabular-nums">
                         {shown.carry}
                         {shown.total != null ? ` / ${shown.total}` : ""} yd
@@ -493,7 +544,7 @@ export function BenchmarkTab() {
                     <span className="text-xs text-faint tabular-nums">{timeLabel(b.savedAt)}</span>
                     <button
                       type="button"
-                      aria-label={`Remove ${club.name} shot`}
+                      aria-label={`Remove ${club?.name ?? b.clubId} shot`}
                       onClick={() => remove(b.id)}
                       className="flex size-11 items-center justify-center text-faint transition-colors duration-150 hover:text-danger"
                     >
@@ -512,11 +563,11 @@ export function BenchmarkTab() {
           Custom chart
         </h3>
         <p className="mb-2 px-1 text-xs text-muted">
-          Nudge one club’s carry. For whole-bag changes, log a shot with Whole chart / Overwrite.
+          Read-only preview from logged shots. To change distances, log benchmark shots above.
         </p>
         {compactChart.length === 0 ? (
           <p className="rounded-xl bg-surface px-4 py-8 text-center text-sm text-muted shadow-panel">
-            Turn on clubs in Bag to adjust distances.
+            Turn on clubs in Bag to see distances.
           </p>
         ) : (
           <ul className="overflow-hidden rounded-xl bg-surface shadow-panel">
@@ -524,41 +575,19 @@ export function BenchmarkTab() {
               <li
                 key={row.clubId}
                 className={cn(
-                  "grid grid-cols-[minmax(0,1fr)_auto_3.25rem_3.25rem] items-center gap-2 px-3 py-2.5",
+                  "grid grid-cols-[minmax(0,1fr)_3.25rem_3.25rem] items-center gap-2 px-3 py-2.5",
                   i < compactChart.length - 1 && "border-b border-line",
                 )}
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
                     <span className="font-semibold tracking-tight">{row.label}</span>
-                    {row.fitOrigin === "manual" ? (
-                      <span className="text-2xs font-semibold tracking-wide text-gold uppercase">
-                        Adj
-                      </span>
-                    ) : row.isYours ? (
+                    {row.isYours ? (
                       <span className="text-2xs font-semibold tracking-wide text-gold uppercase">
                         Yours
                       </span>
                     ) : null}
                   </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    aria-label={`Decrease ${row.label} carry`}
-                    className="flex size-9 items-center justify-center rounded-full bg-raised text-base font-medium text-gold shadow-inset"
-                    onClick={() => requestNudge(row.clubId, -1)}
-                  >
-                    −
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Increase ${row.label} carry`}
-                    className="flex size-9 items-center justify-center rounded-full bg-raised text-base font-medium text-gold shadow-inset"
-                    onClick={() => requestNudge(row.clubId, 1)}
-                  >
-                    +
-                  </button>
                 </div>
                 <span className="text-right text-base font-semibold text-gold tabular-nums">
                   {fmtYd(row.carry)}
@@ -571,19 +600,6 @@ export function BenchmarkTab() {
           </ul>
         )}
       </section>
-
-      {pendingNudge ? (
-        <div className="rounded-xl bg-surface p-4 shadow-panel" role="dialog" aria-modal="true">
-          <h3 className="font-display text-lg font-medium tracking-tight">Manual adjust</h3>
-          <p className="mt-2 text-sm text-muted">{MANUAL_WARN}</p>
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <GhostButton className="w-full" onClick={() => setPendingNudge(null)}>
-              Cancel
-            </GhostButton>
-            <PrimaryButton onClick={confirmNudge}>Continue</PrimaryButton>
-          </div>
-        </div>
-      ) : null}
 
       {list.length > 0 ? (
         <section className="rounded-xl bg-surface p-4 shadow-panel">

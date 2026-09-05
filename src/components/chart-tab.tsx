@@ -9,9 +9,9 @@ import { GhostButton, PrimaryButton } from "./ui";
 
 export function ChartTab() {
   const enabledClubs = useBagStore((s) => s.enabledClubs);
+  const customClubs = useBagStore((s) => s.customClubs);
   const driverLoft = useBagStore((s) => s.driverLoft);
   const benchmarks = useBagStore((s) => s.benchmarks);
-  const manualClubYards = useBagStore((s) => s.manualClubYards);
   const useConditions = useBagStore((s) => s.useConditions);
   const weather = useBagStore((s) => s.weather);
   const windDir = useBagStore((s) => s.windDir);
@@ -41,12 +41,11 @@ export function ChartTab() {
     conditions,
     benchmarks: isFit ? benchmarks : [],
     lockSpeed: isFit,
-    manualClubYards: isFit ? manualClubYards : {},
+    customClubs,
   });
   const flightPct = conditions ? Math.round(weatherMultiplier(conditions) * 100) : null;
   const yoursCount = rows.filter((r) => r.isYours).length;
   const loft = loftLabel(driverLoft);
-
   async function onSave() {
     if (rows.length === 0 || busy) return;
     setBusy(true);
@@ -157,10 +156,7 @@ export function ChartTab() {
 
       <p className="no-print px-1 text-center text-xs text-faint">
         {isFit
-          ? benchmarks.some((b) => b.kind !== "cascade") ||
-            Object.keys(manualClubYards).length > 0
-            ? `Custom bag · ${mph} mph`
-            : "Log shots in Log to build this chart — showing Avg until then"
+          ? `${mph} mph club speed. To fine tune, enter benchmark shots in Log.`
           : `${preset === "sr" ? "Sr" : preset[0].toUpperCase() + preset.slice(1)} template · ${mph} mph`}
         {useConditions ? " · conditions on" : ""}
       </p>
