@@ -168,9 +168,9 @@ export function BenchmarkTab() {
     <div className="flex flex-col gap-5">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h2 className="font-display text-xl font-medium tracking-tight">Fit</h2>
+          <h2 className="font-display text-xl font-medium tracking-tight">Log</h2>
           <p className="text-sm text-muted">
-            Set a swing speed or log shots. Logged shots update the Fit speed; templates stay stock.
+            Set a swing speed or log shots. Logged shots update the Custom speed; templates stay stock.
           </p>
         </div>
         <div className="flex shrink-0 flex-col items-center">

@@ -135,7 +135,7 @@ export function RoundTab() {
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h2 className="font-display text-xl font-medium tracking-tight">This round</h2>
+        <h2 className="font-display text-xl font-medium tracking-tight">Conditions</h2>
         <p className="text-sm text-muted">
           Elevation, temperature, humidity, pressure, and wind. Pull from a location or type them
           in.
@@ -145,7 +145,7 @@ export function RoundTab() {
       <Panel className="flex items-center justify-between gap-3">
         <div>
           <div className="font-medium">Use conditions this round</div>
-          <div className="text-xs text-muted">Scales carry on Chart, Card, and Fit logs</div>
+          <div className="text-xs text-muted">Scales carry on Chart, Card, and Log</div>
         </div>
         <Switch checked={useOn} onChange={setUse} label="Use conditions this round" />
       </Panel>

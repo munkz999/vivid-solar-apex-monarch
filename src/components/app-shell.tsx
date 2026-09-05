@@ -15,8 +15,8 @@ import { CourseStingButton } from "./course-sting-button";
 const TABS: { id: TabId; label: string; icon: typeof LayoutList }[] = [
   { id: "chart", label: "Chart", icon: LayoutList },
   { id: "bag", label: "Bag", icon: Briefcase },
-  { id: "benchmark", label: "Fit", icon: Crosshair },
-  { id: "round", label: "Round", icon: CloudSun },
+  { id: "benchmark", label: "Log", icon: Crosshair },
+  { id: "round", label: "Conditions", icon: CloudSun },
   { id: "card", label: "Card", icon: IdCard },
 ];
 
@@ -233,16 +233,15 @@ export function AppShell() {
             >
               <p className="text-2xs font-medium tracking-widest text-gold uppercase">$4.99 · one-time</p>
               <h2 id="pro-paywall-title" className="mt-1 font-display text-xl font-medium tracking-tight text-ink italic">
-                Fit and Round
+                Unlock Pro
               </h2>
               <p className="mt-3 text-sm leading-relaxed text-muted">
-                Fit speed on the chart, the Fit shot log, and Round stay locked until you unlock Pro.
-                It is a one-time $4.99 purchase, not a subscription.
+                Unlocking Pro is a one-time fee used to support continual improvement and development of Bag Chart. This purchase enables you to:
               </p>
-              <p className="mt-3 text-sm leading-relaxed text-muted">
-                That unlock goes to support building Bag Chart: better fits, round tools, and the next
-                features.
-              </p>
+              <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-muted">
+                <li>log your swing metrics or known club swing speed to build and fine tune your distance chart</li>
+                <li>apply real-time weather conditions to your chart based on your location, further refining your chart by considering environmental factors affecting ball flight</li>
+              </ul>
               <PrimaryButton className="mt-5" onClick={confirmUnlock}>
                 Unlock · $4.99
               </PrimaryButton>

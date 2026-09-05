@@ -14,7 +14,7 @@ export const SPEED_PRESETS: { id: SpeedPreset; label: string }[] = [
   { id: "slow", label: "Slow" },
   { id: "avg", label: "Avg" },
   { id: "pro", label: "Pro" },
-  { id: "fit", label: "Fit" },
+  { id: "fit", label: "Custom" },
 ];
 
 /** Driver mph by gender. Men: Trackman amateur / PGA. Women: amateur charts / LPGA. */
