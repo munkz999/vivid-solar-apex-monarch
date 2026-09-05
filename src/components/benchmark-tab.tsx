@@ -9,6 +9,7 @@ import {
 import { clubRoll, modelCarryRaw, weatherMultiplier, type ConditionsInput } from "@/lib/model";
 import { buildChart, fmtYd, roundConditions } from "@/lib/chart";
 import { currentMph, isDirectShot, useBagStore } from "@/lib/store";
+import { playCupDrop } from "@/lib/cup-drop";
 import { cn } from "@/lib/utils";
 import { Field, GhostButton, Pill, PrimaryButton, TextInput } from "./ui";
 
@@ -166,6 +167,7 @@ export function BenchmarkTab() {
     if (held) bits.push(`${held} held`);
     if (overwritten) bits.push(`${overwritten} overwritten`);
     setSavedFlash(bits.join(" · "));
+    playCupDrop();
     window.setTimeout(() => setSavedFlash(null), 2000);
   }
 
