@@ -5,9 +5,12 @@ import {
   DEFAULT_ENABLED,
   DEFAULT_LOFT,
   modelClubIdFor,
+  modelClubIdFromLoft,
   newCustomClubId,
   resolveBagClub,
   CUSTOM_CATEGORIES,
+  CUSTOM_LOFT_MAX,
+  CUSTOM_LOFT_MIN,
   type ClubId,
   type CustomClub,
   type CustomClubCategory,
@@ -95,6 +98,7 @@ interface BagState {
     name: string;
     fullName?: string;
     category: CustomClubCategory;
+    loft: number;
   }) => CustomClub | null;
   removeCustomClub: (id: string) => void;
   logShot: (
@@ -181,19 +185,25 @@ export const useBagStore = create<BagState>()(
       toggleClub: (id) =>
         set({ enabledClubs: { ...get().enabledClubs, [id]: !get().enabledClubs[id] } }),
       setDriverLoft: (loft) => set({ driverLoft: loft }),
-      addCustomClub: ({ name, fullName, category }) => {
+      addCustomClub: ({ name, fullName, category, loft }) => {
         const cat = CUSTOM_CATEGORIES.find((c) => c.id === category);
         if (!cat) return null;
         const short = normalizeClubName(name);
         if (!short) return null;
+        const loftN = typeof loft === "number" ? loft : Number(loft);
+        if (!Number.isFinite(loftN) || loftN < CUSTOM_LOFT_MIN || loftN > CUSTOM_LOFT_MAX) {
+          return null;
+        }
         const long = normalizeClubName(fullName ?? short) || short;
+        const modelClubId = modelClubIdFromLoft(cat.group, loftN);
         const club: CustomClub = {
           id: newCustomClubId(),
           name: short,
           fullName: long,
           category: cat.id,
           group: cat.group,
-          modelClubId: cat.modelClubId,
+          modelClubId,
+          loft: loftN,
         };
         const state = get();
         set({

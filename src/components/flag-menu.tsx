@@ -194,7 +194,7 @@ function InstructionsBody() {
             Use <span className="text-ink">Hold</span> to keep existing custom shot data on clubs below, or{" "}
             <span className="text-ink">Overwrite</span> to replace that range for a full chart rebuild.
           </li>
-          <li>Add custom clubs (driving iron, utility, etc.) from Log with a category so they sit in Bag and on the chart.</li>
+          <li>Add custom clubs (driving iron, utility, etc.) from <span className="text-ink">Bag</span> with name, loft, and category so they sort into the right group on Bag and Chart.</li>
         </ul>
       </section>
       <section>
@@ -212,7 +212,7 @@ function InstructionsBody() {
             <span className="text-ink">Chart</span> — your bag card; print or save an image for the course.
           </li>
           <li>
-            <span className="text-ink">Bag</span> — which clubs are in play, plus driver loft.
+            <span className="text-ink">Bag</span> — which clubs are in play, driver loft, and custom clubs.
           </li>
           <li>
             <span className="text-ink">Log</span> — swing speed and benchmark shots (Pro).

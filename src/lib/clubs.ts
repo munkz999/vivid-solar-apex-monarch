@@ -21,7 +21,7 @@ export type ClubId =
 
 export type ClubGroup = "woods" | "hybrids" | "irons" | "wedges";
 
-/** User-facing category when adding a custom club in Log. */
+/** User-facing category when adding a custom club in Bag. */
 export type CustomClubCategory = "driver" | "wood" | "hybrid" | "iron" | "wedges";
 
 export interface Club {
@@ -40,6 +40,8 @@ export interface CustomClub {
   group: ClubGroup;
   /** Stock club used for model carry / roll. */
   modelClubId: ClubId;
+  /** Degrees; optional for customs saved before loft was collected. */
+  loft?: number;
 }
 
 /** Unified bag entry used by chart, log, and bag UI. */
@@ -51,6 +53,8 @@ export interface BagClub {
   modelClubId: ClubId;
   isCustom: boolean;
   defaultOn: boolean;
+  /** Degrees when known (customs with loft; stock from STOCK_LOFTS). */
+  loft?: number;
 }
 
 export const CLUBS: Club[] = [
@@ -74,6 +78,35 @@ export const CLUBS: Club[] = [
   { id: "sw", name: "SW", fullName: "Sand Wedge", group: "wedges", defaultOn: true },
   { id: "lw", name: "LW", fullName: "Lob Wedge", group: "wedges", defaultOn: false },
 ];
+
+/**
+ * Typical stock loft (° ) for bag/chart ordering and nearest-model lookup.
+ * Industry-ish defaults (OEM midpoints), not player-fitted:
+ * Dr 10.5 · 3W 15 · 4W 16.5 · 5W 18 · 7W 21 ·
+ * 3H 19 · 4H 22 · 5H 25 ·
+ * 3i 21 … PW 46 · GW 50 · SW 54 · LW 58.
+ */
+export const STOCK_LOFTS: Record<ClubId, number> = {
+  dr: 10.5,
+  "3w": 15,
+  "4w": 16.5,
+  "5w": 18,
+  "7w": 21,
+  "3h": 19,
+  "4h": 22,
+  "5h": 25,
+  "3i": 21,
+  "4i": 24,
+  "5i": 27,
+  "6i": 30,
+  "7i": 34,
+  "8i": 38,
+  "9i": 42,
+  pw: 46,
+  gw: 50,
+  sw: 54,
+  lw: 58,
+};
 
 export const CLUB_BY_ID: Record<ClubId, Club> = Object.fromEntries(
   CLUBS.map((c) => [c.id, c]),
@@ -109,6 +142,10 @@ export const DRIVER_LOFTS = [
 
 export const DEFAULT_LOFT = 10.5;
 
+/** Sensible loft entry range for custom clubs (°). */
+export const CUSTOM_LOFT_MIN = 5;
+export const CUSTOM_LOFT_MAX = 65;
+
 const STOCK_IDS = new Set<string>(CLUBS.map((c) => c.id));
 
 export function isStockClubId(id: string): id is ClubId {
@@ -117,6 +154,32 @@ export function isStockClubId(id: string): id is ClubId {
 
 export function newCustomClubId() {
   return `cx_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
+/** Nearest stock club in `group` by loft (ties → lower loft / earlier in list). */
+export function modelClubIdFromLoft(group: ClubGroup, loft: number): ClubId {
+  const stock = CLUBS.filter((c) => c.group === group);
+  let best = stock[0]?.id ?? "7i";
+  let bestDist = Number.POSITIVE_INFINITY;
+  for (const c of stock) {
+    const dist = Math.abs(STOCK_LOFTS[c.id] - loft);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = c.id;
+    }
+  }
+  return best;
+}
+
+export function loftForSort(club: {
+  isCustom: boolean;
+  loft?: number;
+  modelClubId: ClubId;
+  id: string;
+}): number {
+  if (typeof club.loft === "number" && Number.isFinite(club.loft)) return club.loft;
+  if (!club.isCustom && isStockClubId(club.id)) return STOCK_LOFTS[club.id];
+  return STOCK_LOFTS[club.modelClubId];
 }
 
 export function stockAsBagClub(c: Club): BagClub {
@@ -128,6 +191,7 @@ export function stockAsBagClub(c: Club): BagClub {
     modelClubId: c.id,
     isCustom: false,
     defaultOn: c.defaultOn,
+    loft: STOCK_LOFTS[c.id],
   };
 }
 
@@ -140,19 +204,30 @@ export function customAsBagClub(c: CustomClub): BagClub {
     modelClubId: c.modelClubId,
     isCustom: true,
     defaultOn: true,
+    loft: typeof c.loft === "number" && Number.isFinite(c.loft) ? c.loft : undefined,
   };
 }
 
-/** Stock clubs in order, with custom clubs appended after their group. */
+/**
+ * Stock + custom clubs per group, sorted ascending by loft
+ * (lower loft = longer club = earlier). Customs interleave with stock.
+ * Legacy customs without loft fall back to their model club's stock loft.
+ */
 export function bagClubList(customClubs: CustomClub[] = []): BagClub[] {
   const out: BagClub[] = [];
   for (const g of GROUPS) {
-    for (const c of CLUBS.filter((x) => x.group === g.id)) {
-      out.push(stockAsBagClub(c));
-    }
-    for (const c of customClubs.filter((x) => x.group === g.id)) {
-      out.push(customAsBagClub(c));
-    }
+    const groupClubs: BagClub[] = [
+      ...CLUBS.filter((x) => x.group === g.id).map(stockAsBagClub),
+      ...customClubs.filter((x) => x.group === g.id).map(customAsBagClub),
+    ];
+    groupClubs.sort((a, b) => {
+      const d = loftForSort(a) - loftForSort(b);
+      if (d !== 0) return d;
+      // Stable-ish: stock before custom on exact loft tie, then name.
+      if (a.isCustom !== b.isCustom) return a.isCustom ? 1 : -1;
+      return a.name.localeCompare(b.name);
+    });
+    out.push(...groupClubs);
   }
   return out;
 }
@@ -177,4 +252,9 @@ export function shortClubLabel(id: string, loft: number, customClubs: CustomClub
     return `Dr ${loftTxt}°`;
   }
   return resolveBagClub(id, customClubs)?.name ?? id;
+}
+
+export function formatLoftDeg(loft: number): string {
+  const t = loft.toFixed(1);
+  return t.endsWith(".0") ? `${t.slice(0, -2)}°` : `${t}°`;
 }

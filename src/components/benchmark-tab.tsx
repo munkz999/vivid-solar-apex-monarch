@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, X } from "lucide-react";
+import { X } from "lucide-react";
 import {
-  CUSTOM_CATEGORIES,
   bagClubList,
   resolveBagClub,
-  type CustomClubCategory,
 } from "@/lib/clubs";
 import { clubRoll, modelCarryRaw, weatherMultiplier, type ConditionsInput } from "@/lib/model";
 import { buildChart, fmtYd, roundConditions } from "@/lib/chart";
@@ -60,8 +58,6 @@ export function BenchmarkTab() {
   const setFitDraft = useBagStore((s) => s.setFitDraft);
   const applyManualMph = useBagStore((s) => s.applyManualMph);
   const manualMph = useBagStore((s) => s.manualMph);
-  const addCustomClub = useBagStore((s) => s.addCustomClub);
-
   const inBag = useMemo(
     () => bagClubList(customClubs).filter((c) => enabled[c.id]),
     [customClubs, enabled],
@@ -70,10 +66,6 @@ export function BenchmarkTab() {
   const [savedFlash, setSavedFlash] = useState<string | null>(null);
   const [speedEdit, setSpeedEdit] = useState<string | null>(null);
   const [pendingMph, setPendingMph] = useState<number | null>(null);
-  const [addingCustom, setAddingCustom] = useState(false);
-  const [customName, setCustomName] = useState("");
-  const [customCategory, setCustomCategory] = useState<CustomClubCategory>("iron");
-
   const clubId = draft.clubId;
   const carry = draft.carry;
   const total = draft.total;
@@ -210,15 +202,6 @@ export function BenchmarkTab() {
     customClubs,
   });
 
-  function onAddCustom() {
-    const club = addCustomClub({ name: customName, category: customCategory });
-    if (!club) return;
-    setCustomName("");
-    setAddingCustom(false);
-    setSavedFlash(`Added ${club.name}`);
-    window.setTimeout(() => setSavedFlash(null), 1600);
-  }
-
   function holdOverwriteCopy() {
     if (adjustMode === "single") {
       return `Only ${activeMeta?.name ?? activeClub} updates.`;
@@ -340,56 +323,8 @@ export function BenchmarkTab() {
                 {c.id === "dr" ? "Dr" : c.name}
               </Pill>
             ))}
-            <Pill
-              active={addingCustom}
-              onClick={() => setAddingCustom((v) => !v)}
-              aria-label="Add custom club"
-            >
-              <Plus className="mr-0.5 inline size-3.5" strokeWidth={2.4} />
-              Custom
-            </Pill>
           </div>
         </Field>
-
-        {addingCustom ? (
-          <div className="mt-4 rounded-lg bg-raised p-3 shadow-inset">
-            <Field label="Custom club name">
-              <TextInput
-                value={customName}
-                placeholder="e.g. DI, 2I, UW"
-                maxLength={24}
-                onChange={(e) => setCustomName(e.target.value)}
-              />
-            </Field>
-            <div className="mt-3">
-              <Field label="Category">
-                <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
-                  {CUSTOM_CATEGORIES.map((cat) => (
-                    <Pill
-                      key={cat.id}
-                      active={customCategory === cat.id}
-                      onClick={() => setCustomCategory(cat.id)}
-                    >
-                      {cat.label}
-                    </Pill>
-                  ))}
-                </div>
-              </Field>
-            </div>
-            <p className="mt-2 text-xs text-muted">
-              Uses the {CUSTOM_CATEGORIES.find((c) => c.id === customCategory)?.label.toLowerCase()}{" "}
-              model for chart distances. Added clubs appear in Bag and on the Custom chart.
-            </p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <GhostButton className="w-full" onClick={() => setAddingCustom(false)}>
-                Cancel
-              </GhostButton>
-              <PrimaryButton disabled={!customName.trim()} onClick={onAddCustom}>
-                Add club
-              </PrimaryButton>
-            </div>
-          </div>
-        ) : null}
 
         <div className="mt-4 grid grid-cols-2 gap-3">
           <Field label="Carry (yd)">
