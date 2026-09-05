@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { CLUBS, DEFAULT_ENABLED, DEFAULT_LOFT, type ClubId } from "./clubs";
 import { clubRoll, fittedMph, modelCarryRaw, type WindDir } from "./model";
 
-export type TabId = "chart" | "bag" | "benchmark" | "round" | "card";
+export type TabId = "chart" | "bag" | "benchmark" | "round";
 export type SpeedPreset = "sr" | "slow" | "avg" | "pro" | "fit";
 export type Gender = "men" | "women";
 export type Source = "sim" | "course" | "range";
@@ -58,6 +58,9 @@ export interface FitDraft {
   total: string;
 }
 
+/** Per-club absolute yards (standard air) from Log up/down nudges. Chart respects these. */
+export type ManualClubYards = Partial<Record<ClubId, { carry: number; total: number }>>;
+
 interface BagState {
   tab: TabId;
   speedPreset: SpeedPreset;
@@ -74,6 +77,7 @@ interface BagState {
   fitHistory: Benchmark[][];
   fitDraft: FitDraft;
   manualMph: number | null;
+  manualClubYards: ManualClubYards;
   setTab: (tab: TabId) => void;
   setPreset: (preset: SpeedPreset) => void;
   setGender: (gender: Gender) => void;
@@ -95,6 +99,8 @@ interface BagState {
   setOverwriteBelow: (on: boolean) => void;
   setFitDraft: (p: Partial<FitDraft>) => void;
   applyManualMph: (mph: number) => void;
+  setManualClubYards: (clubId: ClubId, yards: { carry: number; total: number }) => void;
+  clearManualClubYards: (clubId?: ClubId) => void;
 }
 
 export function clampMph(n: number) {
@@ -152,6 +158,7 @@ export const useBagStore = create<BagState>()(
       fitHistory: [],
       fitDraft: { clubId: "dr", carry: "", total: "" },
       manualMph: null,
+      manualClubYards: {},
       setTab: (tab) => set({ tab }),
       setPreset: (preset) => set({ speedPreset: preset }),
       setGender: (gender) => set({ gender }),
@@ -210,7 +217,10 @@ export const useBagStore = create<BagState>()(
           const hit = new Set(cascades.map((x) => x.clubId));
           rest = rest.filter((x) => !(x.kind === "cascade" && hit.has(x.clubId)));
         }
-        set({ benchmarks: [shot, ...cascades, ...rest], fitHistory: history });
+        const manualClubYards = { ...state.manualClubYards };
+        delete manualClubYards[b.clubId];
+        for (const c of cascades) delete manualClubYards[c.clubId];
+        set({ benchmarks: [shot, ...cascades, ...rest], fitHistory: history, manualClubYards });
         return { cascaded: cascades.length, held, overwritten };
       },
       revertFit: () => {
@@ -237,6 +247,7 @@ export const useBagStore = create<BagState>()(
           fitHistory: pushHistory(get().fitHistory, get().benchmarks),
           benchmarks: [],
           manualMph: null,
+          manualClubYards: {},
           fitDraft: { ...get().fitDraft, carry: "", total: "" },
         }),
       setUseConditions: (on) => set({ useConditions: on }),
@@ -268,11 +279,31 @@ export const useBagStore = create<BagState>()(
             fitHistory: pushHistory(state.fitHistory, state.benchmarks),
             benchmarks: [],
             manualMph: mph,
+            manualClubYards: {},
             fitDraft: { ...state.fitDraft, carry: "", total: "" },
           });
           return;
         }
         set({ manualMph: mph });
+      },
+      setManualClubYards: (clubId, yards) => {
+        const carry = Math.min(450, Math.max(1, Math.round(yards.carry)));
+        const total = Math.min(500, Math.max(carry, Math.round(yards.total)));
+        set({
+          manualClubYards: {
+            ...get().manualClubYards,
+            [clubId]: { carry, total },
+          },
+        });
+      },
+      clearManualClubYards: (clubId) => {
+        if (!clubId) {
+          set({ manualClubYards: {} });
+          return;
+        }
+        const next = { ...get().manualClubYards };
+        delete next[clubId];
+        set({ manualClubYards: next });
       },
     }),
     {
@@ -294,8 +325,9 @@ export const useBagStore = create<BagState>()(
         fitHistory: s.fitHistory,
         fitDraft: s.fitDraft,
         manualMph: s.manualMph,
+        manualClubYards: s.manualClubYards,
       }),
-      version: 4,
+      version: 5,
       migrate: (persisted, version) => {
         const s = persisted as Record<string, unknown>;
         if (version < 2) {
@@ -327,6 +359,12 @@ export const useBagStore = create<BagState>()(
           s.speedPreset = map[prev] ?? "avg";
           s.gender = "men";
           delete s.effort;
+        }
+        if (version < 5) {
+          if (s.tab === "card") s.tab = "chart";
+          if (s.manualClubYards == null || typeof s.manualClubYards !== "object") {
+            s.manualClubYards = {};
+          }
         }
         return s;
       },

@@ -1,10 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { CLUB_BY_ID, CLUBS, type ClubId } from "@/lib/clubs";
 import { clubRoll, modelCarryRaw, weatherMultiplier, type ConditionsInput } from "@/lib/model";
+import { buildChart, fmtYd, roundConditions } from "@/lib/chart";
 import { currentMph, isDirectShot, useBagStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { Field, GhostButton, Pill, PrimaryButton, TextInput } from "./ui";
+
+const MANUAL_WARN =
+  "You are manually adjusting your club distance. If you wish to benchmark a club and have all clubs be adjusted for broader chart adjustment, you should log a shot and select overwrite/adjust instead.";
 
 function timeLabel(ts: number) {
   const d = new Date(ts);
@@ -46,12 +50,17 @@ export function BenchmarkTab() {
   const setFitDraft = useBagStore((s) => s.setFitDraft);
   const applyManualMph = useBagStore((s) => s.applyManualMph);
   const manualMph = useBagStore((s) => s.manualMph);
+  const manualClubYards = useBagStore((s) => s.manualClubYards);
+  const setManualClubYards = useBagStore((s) => s.setManualClubYards);
+  const setPreset = useBagStore((s) => s.setPreset);
 
   const inBag = useMemo(() => CLUBS.filter((c) => enabled[c.id]), [enabled]);
   const [confirmClear, setConfirmClear] = useState(false);
   const [savedFlash, setSavedFlash] = useState<string | null>(null);
   const [speedEdit, setSpeedEdit] = useState<string | null>(null);
   const [pendingMph, setPendingMph] = useState<number | null>(null);
+  const [pendingNudge, setPendingNudge] = useState<{ clubId: ClubId; delta: number } | null>(null);
+  const warnedManual = useRef(false);
 
   const clubId = draft.clubId;
   const carry = draft.carry;
@@ -162,6 +171,54 @@ export function BenchmarkTab() {
     if (pendingMph == null) return;
     applyManualMph(pendingMph);
     setPendingMph(null);
+  }
+
+  const fitConditions = roundConditions({
+    useConditions,
+    elevFt: weather?.elevFt ?? 0,
+    tempF: weather?.tempF ?? 70,
+    humidityPct: weather?.humidityPct,
+    pressureInhg: weather?.pressureInhg,
+    windDir,
+    windMph,
+  });
+  const compactChart = buildChart({
+    enabledClubs: enabled,
+    mph,
+    loft,
+    effort: 100,
+    conditions: fitConditions,
+    benchmarks: list,
+    lockSpeed: true,
+    manualClubYards,
+  });
+
+  function applyNudge(clubId: ClubId, delta: number) {
+    const row = compactChart.find((r) => r.clubId === clubId);
+    if (!row) return;
+    const nextCarryShown = Math.round(row.carry) + delta;
+    if (nextCarryShown < 1 || nextCarryShown > 450) return;
+    const rollShown = Math.max(0, Math.round(row.total) - Math.round(row.carry));
+    const nextTotalShown = Math.min(500, nextCarryShown + rollShown);
+    const storedCarry = Math.round(nextCarryShown / wx);
+    const storedTotal = Math.round(storedCarry + rollShown / rollWx);
+    setManualClubYards(clubId, { carry: storedCarry, total: storedTotal });
+    setPreset("fit");
+  }
+
+  function requestNudge(clubId: ClubId, delta: number) {
+    if (!warnedManual.current) {
+      setPendingNudge({ clubId, delta });
+      return;
+    }
+    applyNudge(clubId, delta);
+  }
+
+  function confirmNudge() {
+    if (!pendingNudge) return;
+    warnedManual.current = true;
+    applyNudge(pendingNudge.clubId, pendingNudge.delta);
+    setPendingNudge(null);
   }
 
   return (
@@ -449,6 +506,84 @@ export function BenchmarkTab() {
           </ul>
         )}
       </section>
+
+      <section>
+        <h3 className="mb-2 px-1 text-2xs font-medium tracking-widest text-faint uppercase">
+          Custom chart
+        </h3>
+        <p className="mb-2 px-1 text-xs text-muted">
+          Nudge one club’s carry. For whole-bag changes, log a shot with Whole chart / Overwrite.
+        </p>
+        {compactChart.length === 0 ? (
+          <p className="rounded-xl bg-surface px-4 py-8 text-center text-sm text-muted shadow-panel">
+            Turn on clubs in Bag to adjust distances.
+          </p>
+        ) : (
+          <ul className="overflow-hidden rounded-xl bg-surface shadow-panel">
+            {compactChart.map((row, i) => (
+              <li
+                key={row.clubId}
+                className={cn(
+                  "grid grid-cols-[minmax(0,1fr)_auto_3.25rem_3.25rem] items-center gap-2 px-3 py-2.5",
+                  i < compactChart.length - 1 && "border-b border-line",
+                )}
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold tracking-tight">{row.label}</span>
+                    {row.fitOrigin === "manual" ? (
+                      <span className="text-2xs font-semibold tracking-wide text-gold uppercase">
+                        Adj
+                      </span>
+                    ) : row.isYours ? (
+                      <span className="text-2xs font-semibold tracking-wide text-gold uppercase">
+                        Yours
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    aria-label={`Decrease ${row.label} carry`}
+                    className="flex size-9 items-center justify-center rounded-full bg-raised text-base font-medium text-gold shadow-inset"
+                    onClick={() => requestNudge(row.clubId, -1)}
+                  >
+                    −
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Increase ${row.label} carry`}
+                    className="flex size-9 items-center justify-center rounded-full bg-raised text-base font-medium text-gold shadow-inset"
+                    onClick={() => requestNudge(row.clubId, 1)}
+                  >
+                    +
+                  </button>
+                </div>
+                <span className="text-right text-base font-semibold text-gold tabular-nums">
+                  {fmtYd(row.carry)}
+                </span>
+                <span className="text-right text-base font-semibold tabular-nums">
+                  {fmtYd(row.total)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {pendingNudge ? (
+        <div className="rounded-xl bg-surface p-4 shadow-panel" role="dialog" aria-modal="true">
+          <h3 className="font-display text-lg font-medium tracking-tight">Manual adjust</h3>
+          <p className="mt-2 text-sm text-muted">{MANUAL_WARN}</p>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <GhostButton className="w-full" onClick={() => setPendingNudge(null)}>
+              Cancel
+            </GhostButton>
+            <PrimaryButton onClick={confirmNudge}>Continue</PrimaryButton>
+          </div>
+        </div>
+      ) : null}
 
       {list.length > 0 ? (
         <section className="rounded-xl bg-surface p-4 shadow-panel">

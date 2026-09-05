@@ -1,39 +1,27 @@
-import { IdCard } from "lucide-react";
-import { CLUB_BY_ID } from "@/lib/clubs";
+import { useState } from "react";
+import { Printer, Share } from "lucide-react";
 import { weatherMultiplier } from "@/lib/model";
-import { buildChart, fmtYd, roundConditions, type ChartRow } from "@/lib/chart";
+import { buildChart, fmtYd, loftLabel, roundConditions } from "@/lib/chart";
+import { saveBagCardPng } from "@/lib/bag-card";
 import { currentMph, useBagStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { PrimaryButton } from "./ui";
-
-function signed(n: number) {
-  const r = Math.round(n);
-  if (r === 0) return "even vs model";
-  return `${r > 0 ? "+" : ""}${r} vs model`;
-}
-
-function vsLabel(row: ChartRow) {
-  if (!row.isYours || row.vsModel === null) return "model";
-  const delta = signed(row.vsModel);
-  if (row.fitOrigin === "cascade") {
-    const from = row.fromClubId ? CLUB_BY_ID[row.fromClubId].name : "fit";
-    return `from ${from} · ${delta}`;
-  }
-  const avg = row.shotCount <= 1 ? "1 shot" : `${row.shotCount}-shot avg`;
-  return `${avg} · ${delta}`;
-}
+import { GhostButton, PrimaryButton } from "./ui";
 
 export function ChartTab() {
   const enabledClubs = useBagStore((s) => s.enabledClubs);
   const driverLoft = useBagStore((s) => s.driverLoft);
   const benchmarks = useBagStore((s) => s.benchmarks);
+  const manualClubYards = useBagStore((s) => s.manualClubYards);
   const useConditions = useBagStore((s) => s.useConditions);
   const weather = useBagStore((s) => s.weather);
   const windDir = useBagStore((s) => s.windDir);
   const windMph = useBagStore((s) => s.windMph);
   const mph = useBagStore(currentMph);
   const preset = useBagStore((s) => s.speedPreset);
-  const setTab = useBagStore((s) => s.setTab);
+  const gender = useBagStore((s) => s.gender);
+
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
 
   const conditions = roundConditions({
     useConditions,
@@ -44,9 +32,8 @@ export function ChartTab() {
     windDir,
     windMph,
   });
-
   const isFit = preset === "fit";
-  const chart = buildChart({
+  const rows = buildChart({
     enabledClubs,
     mph,
     loft: driverLoft,
@@ -54,21 +41,60 @@ export function ChartTab() {
     conditions,
     benchmarks: isFit ? benchmarks : [],
     lockSpeed: isFit,
+    manualClubYards: isFit ? manualClubYards : {},
   });
+  const flightPct = conditions ? Math.round(weatherMultiplier(conditions) * 100) : null;
+  const yoursCount = rows.filter((r) => r.isYours).length;
+  const loft = loftLabel(driverLoft);
 
-  const flightPct = conditions ? Math.round(weatherMultiplier(conditions) * 100) : 100;
+  async function onSave() {
+    if (rows.length === 0 || busy) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      const result = await saveBagCardPng(rows, {
+        mph,
+        gender,
+        loftLabel: loft,
+        place: useConditions ? weather?.place : undefined,
+        flightPct: flightPct ?? undefined,
+      });
+      if (result === "shared") setStatus("Shared");
+      else if (result === "downloaded") setStatus("Saved to files");
+    } catch {
+      setStatus("Could not save");
+    } finally {
+      setBusy(false);
+      window.setTimeout(() => setStatus(null), 1800);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4">
-      {useConditions ? (
-        <div className="flex items-center justify-between rounded-lg bg-surface px-3.5 py-2.5 text-xs text-muted shadow-panel">
-          <span className="truncate">{weather?.place ?? "No location yet"}</span>
-          <span className="font-medium text-gold tabular-nums">{flightPct}% flight</span>
-        </div>
-      ) : null}
+      <div className="no-print">
+        <h2 className="font-display text-xl font-medium tracking-tight">Chart</h2>
+        <p className="text-sm text-muted">
+          Your bag distances — print or save for the course.
+        </p>
+      </div>
 
-      <div className="overflow-hidden rounded-xl bg-surface shadow-panel">
-        <div className="grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem] items-end gap-2 border-b border-line px-4 pt-3 pb-2">
+      <div
+        id="bag-card"
+        className="overflow-hidden rounded-xl bg-surface px-4 pt-5 pb-4 shadow-panel"
+      >
+        <div className="text-center">
+          <h3 className="font-display text-3xl leading-none font-medium text-gold italic">Bag Chart</h3>
+          <p className="mt-2 text-xs tracking-wide text-muted tabular-nums">
+            {mph} mph · Dr {loft}° · {gender === "women" ? "Women" : "Men"}
+          </p>
+          {useConditions && weather ? (
+            <p className="mt-1 text-2xs text-faint">
+              {weather.place} · {flightPct}% flight
+            </p>
+          ) : null}
+        </div>
+
+        <div className="mt-4 grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem] gap-2 border-t border-line pt-2">
           <span className="text-2xs font-medium tracking-widest text-faint uppercase">Club</span>
           <span className="text-2xs text-right font-medium tracking-widest text-faint uppercase">
             Carry
@@ -78,49 +104,63 @@ export function ChartTab() {
           </span>
         </div>
 
-        {chart.length === 0 ? (
-          <p className="px-4 py-10 text-center text-sm text-muted">
-            Turn on clubs in Bag to build your chart.
-          </p>
+        {rows.length === 0 ? (
+          <p className="py-10 text-center text-sm text-muted">Turn on clubs in Bag first.</p>
         ) : (
           <ul>
-            {chart.map((row, i) => (
+            {rows.map((row, i) => (
               <li
                 key={row.clubId}
                 className={cn(
-                  "grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem] items-center gap-2 px-4 py-3",
-                  i < chart.length - 1 && "border-b border-line",
+                  "grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem] items-center gap-2 py-2",
+                  i < rows.length - 1 && "border-b border-line",
                 )}
               >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold tracking-tight text-ink">{row.label}</span>
-                    {row.isYours ? (
-                      <span className="rounded-pill bg-gold/15 px-1.5 py-0.5 text-2xs font-semibold tracking-wide text-gold uppercase">
-                        Yours
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="mt-0.5 text-xs text-faint">{vsLabel(row)}</div>
+                <div className="flex min-w-0 items-baseline gap-1.5">
+                  <span className="font-semibold tracking-tight">{row.label}</span>
+                  {row.isYours ? (
+                    <span className="text-2xs font-semibold tracking-wide text-gold uppercase">
+                      Yours
+                    </span>
+                  ) : null}
                 </div>
-                <div className="text-stat text-right font-sans text-gold tabular-nums">{fmtYd(row.carry)}</div>
-                <div className="text-stat text-right font-sans text-ink tabular-nums">{fmtYd(row.total)}</div>
+                <span className="text-right text-lg font-semibold text-gold tabular-nums">
+                  {fmtYd(row.carry)}
+                </span>
+                <span className="text-right text-lg font-semibold tabular-nums">{fmtYd(row.total)}</span>
               </li>
             ))}
           </ul>
         )}
+
+        <p className="mt-4 border-t border-line pt-3 text-center text-2xs tracking-wide text-faint uppercase">
+          Yards
+          {yoursCount ? ` · ${yoursCount} yours` : " · model"}
+          {` · ${new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" })}`}
+        </p>
       </div>
 
-      <PrimaryButton disabled={chart.length === 0} onClick={() => setTab("card")}>
-        <IdCard className="mr-2 size-4" strokeWidth={2} />
-        Bag card
-      </PrimaryButton>
+      <div className="no-print grid grid-cols-2 gap-2">
+        <GhostButton
+          className="w-full"
+          disabled={rows.length === 0}
+          onClick={() => window.print()}
+        >
+          <Printer className="mr-2 size-4" strokeWidth={2} />
+          Print
+        </GhostButton>
+        <PrimaryButton disabled={rows.length === 0 || busy} onClick={onSave}>
+          <Share className="mr-2 size-4" strokeWidth={2} />
+          {status ?? (busy ? "Saving…" : "Save image")}
+        </PrimaryButton>
+      </div>
 
-      <p className="px-1 text-center text-xs text-faint">
+      <p className="no-print px-1 text-center text-xs text-faint">
         {isFit
-          ? benchmarks.some((b) => b.kind !== "cascade")
-            ? `Fit bag · ${mph} mph`
-            : "Log shots in Fit to build this chart — showing Avg until then"
+          ? benchmarks.some((b) => b.kind !== "cascade") ||
+            Object.keys(manualClubYards).length > 0
+            ? `Custom bag · ${mph} mph`
+            : "Log shots in Log to build this chart — showing Avg until then"
           : `${preset === "sr" ? "Sr" : preset[0].toUpperCase() + preset.slice(1)} template · ${mph} mph`}
         {useConditions ? " · conditions on" : ""}
       </p>

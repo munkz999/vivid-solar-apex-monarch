@@ -35,7 +35,10 @@ export function RoundTab() {
   const [loadingWx, setLoadingWx] = useState(false);
   const [geoBusy, setGeoBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [geoHint, setGeoHint] = useState<string | null>(null);
   const seq = useRef(0);
+  const autoGeoTried = useRef(false);
+  const userChosePlace = useRef(false);
 
   useEffect(() => {
     const q = query.trim();
@@ -58,9 +61,16 @@ export function RoundTab() {
     return () => window.clearTimeout(id);
   }, [query]);
 
-  async function applyPlace(place: string, lat: number, lon: number) {
+  async function applyPlace(
+    place: string,
+    lat: number,
+    lon: number,
+    opts?: { fromUser?: boolean },
+  ) {
+    if (opts?.fromUser) userChosePlace.current = true;
     setLoadingWx(true);
     setError(null);
+    setGeoHint(null);
     try {
       const f = await fetchForecast(lat, lon);
       const wind = Math.min(30, Math.max(0, Math.round(f.windMph)));
@@ -86,30 +96,54 @@ export function RoundTab() {
     }
   }
 
-  function useMyLocation() {
+  function useMyLocation(opts?: { silent?: boolean; fromUser?: boolean }) {
+    const silent = opts?.silent === true;
+    const fromUser = opts?.fromUser !== false && !silent;
     if (!navigator.geolocation) {
-      setError("Location isn’t available in this browser.");
+      if (silent) setGeoHint("Location unavailable — search a city, course, zip, or address.");
+      else setError("Location isn’t available in this browser.");
       return;
     }
     setGeoBusy(true);
-    setError(null);
+    if (!silent) setError(null);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const { latitude, longitude } = pos.coords;
         try {
+          // Don’t overwrite an explicit place the user already chose / persisted.
+          if (silent) {
+            const cur = useBagStore.getState().weather;
+            if (userChosePlace.current) return;
+            if (cur && cur.place && !(cur.lat === 0 && cur.lon === 0)) return;
+          }
           const name = await reversePlace(latitude, longitude);
-          await applyPlace(name, latitude, longitude);
+          await applyPlace(name, latitude, longitude, { fromUser });
         } finally {
           setGeoBusy(false);
         }
       },
       () => {
         setGeoBusy(false);
-        setError("Couldn’t read location. Search a city or course instead.");
+        if (silent) {
+          setGeoHint("Couldn’t get location — search a city, course, zip, or address.");
+        } else {
+          setError("Couldn’t read location. Search a city or course instead.");
+        }
       },
       { enableHighAccuracy: false, timeout: 12000, maximumAge: 60000 },
     );
   }
+
+  // Auto-request device location on first Conditions open when no place is set yet.
+  useEffect(() => {
+    if (autoGeoTried.current) return;
+    autoGeoTried.current = true;
+    const cur = weather;
+    if (userChosePlace.current) return;
+    if (cur && cur.place && !(cur.lat === 0 && cur.lon === 0)) return;
+    useMyLocation({ silent: true, fromUser: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once on mount
+  }, []);
 
   function editAir(p: Parameters<typeof patchWeather>[0]) {
     patchWeather(p);
@@ -145,7 +179,7 @@ export function RoundTab() {
       <Panel className="flex items-center justify-between gap-3">
         <div>
           <div className="font-medium">Use conditions this round</div>
-          <div className="text-xs text-muted">Scales carry on Chart, Card, and Log</div>
+          <div className="text-xs text-muted">Scales carry on Chart and Log</div>
         </div>
         <Switch checked={useOn} onChange={setUse} label="Use conditions this round" />
       </Panel>
@@ -158,7 +192,7 @@ export function RoundTab() {
               setQuery(e.target.value);
               setError(null);
             }}
-            placeholder="City or course"
+            placeholder="Course, city, zip, or address"
             autoComplete="off"
           />
         </Field>
@@ -170,7 +204,7 @@ export function RoundTab() {
                 <button
                   type="button"
                   className="flex min-h-12 w-full flex-col items-start px-3 py-2 text-left"
-                  onClick={() => applyPlace(h.detail ? `${h.name}, ${h.detail}` : h.name, h.lat, h.lon)}
+                  onClick={() => applyPlace(h.detail ? `${h.name}, ${h.detail}` : h.name, h.lat, h.lon, { fromUser: true })}
                 >
                   <span className="text-sm font-medium">{h.name}</span>
                   {h.detail ? <span className="text-xs text-muted">{h.detail}</span> : null}
@@ -181,13 +215,13 @@ export function RoundTab() {
         ) : null}
 
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <PrimaryButton onClick={useMyLocation} disabled={geoBusy || loadingWx}>
+          <PrimaryButton onClick={() => useMyLocation({ fromUser: true })} disabled={geoBusy || loadingWx}>
             {geoBusy ? "Locating…" : "Use my location"}
           </PrimaryButton>
           <GhostButton
             className="w-full"
             disabled={!weather || loadingWx || (weather.lat === 0 && weather.lon === 0)}
-            onClick={() => weather && applyPlace(weather.place, weather.lat, weather.lon)}
+            onClick={() => weather && applyPlace(weather.place, weather.lat, weather.lon, { fromUser: true })}
           >
             {loadingWx ? "Updating…" : "Refresh"}
           </GhostButton>
@@ -314,6 +348,7 @@ export function RoundTab() {
         ) : null}
       </Panel>
 
+      {geoHint && !error ? <p className="px-1 text-sm text-muted">{geoHint}</p> : null}
       {error ? <p className="px-1 text-sm text-danger">{error}</p> : null}
     </div>
   );

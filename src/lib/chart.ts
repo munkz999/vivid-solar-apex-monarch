@@ -6,7 +6,7 @@ import {
   type Effort,
   type Yardage,
 } from "./model";
-import { isDirectShot, type Benchmark } from "./store";
+import { isDirectShot, type Benchmark, type ManualClubYards } from "./store";
 
 export function loftLabel(loft: number) {
   const t = loft.toFixed(1);
@@ -17,7 +17,7 @@ export function fmtYd(n: number) {
   return String(Math.round(n));
 }
 
-export type FitOrigin = "model" | "shots" | "cascade";
+export type FitOrigin = "model" | "shots" | "cascade" | "manual";
 
 export interface ChartRow extends Yardage {
   shotCount: number;
@@ -52,6 +52,7 @@ export function resolveYours(
   mph: number,
   loft: number,
   lockSpeed = false,
+  manual?: ManualClubYards[ClubId],
 ): {
   carry: number;
   roll: number | null;
@@ -59,6 +60,15 @@ export function resolveYours(
   origin: Exclude<FitOrigin, "model">;
   fromClubId?: ClubId;
 } | null {
+  // Manual Log nudges win while set (cleared when a shot is logged for the club).
+  if (manual) {
+    return {
+      carry: manual.carry,
+      roll: Math.max(0, manual.total - manual.carry),
+      count: 0,
+      origin: "manual",
+    };
+  }
   const direct = benchmarks.filter((b) => b.clubId === clubId && isDirectShot(b));
   const blend = blendedYours(direct, clubId, mph, loft, lockSpeed);
   if (blend) return { ...blend, origin: "shots" };
@@ -84,10 +94,19 @@ export function buildChart(opts: {
   conditions: ConditionsInput | null;
   benchmarks: Benchmark[];
   lockSpeed?: boolean;
+  manualClubYards?: ManualClubYards;
 }): ChartRow[] {
   const lockSpeed = opts.lockSpeed ?? false;
+  const manuals = opts.manualClubYards ?? {};
   return CLUBS.filter((c) => opts.enabledClubs[c.id]).map((club) => {
-    const fit = resolveYours(opts.benchmarks, club.id, opts.mph, opts.loft, lockSpeed);
+    const fit = resolveYours(
+      opts.benchmarks,
+      club.id,
+      opts.mph,
+      opts.loft,
+      lockSpeed,
+      manuals[club.id],
+    );
     const row = computeYardage({
       clubId: club.id,
       mph: opts.mph,

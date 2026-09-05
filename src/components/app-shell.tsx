@@ -1,4 +1,4 @@
-import { CloudSun, Crosshair, Flag, LayoutList, Briefcase, IdCard, Lock } from "lucide-react";
+import { CloudSun, Crosshair, Flag, LayoutList, Briefcase, Lock } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { CLUBS } from "@/lib/clubs";
 import { currentMph, SPEED_PRESETS, useBagStore, type Gender, type TabId } from "@/lib/store";
@@ -9,7 +9,6 @@ import { ChartTab } from "./chart-tab";
 import { BagTab } from "./bag-tab";
 import { BenchmarkTab } from "./benchmark-tab";
 import { RoundTab } from "./round-tab";
-import { CardTab } from "./card-tab";
 import { CourseStingButton } from "./course-sting-button";
 
 const TABS: { id: TabId; label: string; icon: typeof LayoutList }[] = [
@@ -17,7 +16,6 @@ const TABS: { id: TabId; label: string; icon: typeof LayoutList }[] = [
   { id: "bag", label: "Bag", icon: Briefcase },
   { id: "benchmark", label: "Log", icon: Crosshair },
   { id: "round", label: "Conditions", icon: CloudSun },
-  { id: "card", label: "Card", icon: IdCard },
 ];
 
 const TAP_WINDOW_MS = 800;
@@ -48,6 +46,10 @@ export function AppShell() {
   useEffect(() => {
     if (onFit && preset !== "fit") setPreset("fit");
   }, [onFit, preset, setPreset]);
+
+  useEffect(() => {
+    if ((tab as string) === "card") setTab("chart");
+  }, [tab, setTab]);
 
   useEffect(() => {
     if (unlocked) return;
@@ -176,7 +178,6 @@ export function AppShell() {
           {tab === "bag" ? <BagTab /> : null}
           {tab === "benchmark" && unlocked ? <BenchmarkTab /> : null}
           {tab === "round" && unlocked ? <RoundTab /> : null}
-          {tab === "card" ? <CardTab /> : null}
         </main>
 
         <nav
@@ -184,7 +185,7 @@ export function AppShell() {
           aria-label="Primary"
         >
           <CourseStingButton />
-          <ul className="grid min-w-0 flex-1 grid-cols-5">
+          <ul className="grid min-w-0 flex-1 grid-cols-4">
             {TABS.map((t) => {
               const Icon = t.icon;
               const on = tab === t.id;
