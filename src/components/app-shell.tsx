@@ -31,7 +31,7 @@ export function AppShell() {
   const preset = useBagStore((s) => s.speedPreset);
   const setPreset = useBagStore((s) => s.setPreset);
   const mph = useBagStore(currentMph);
-  const clubCount = useBagStore((s) => bagClubList(s.customClubs).filter((c) => s.enabledClubs[c.id]).length);
+  const clubCount = useBagStore((s) => bagClubList(s.customClubs, s.clubLoftOverrides, s.driverLoft).filter((c) => s.enabledClubs[c.id]).length);
   const unlocked = useUnlock();
   useNativeUnlockListener();
   const onFit = tab === "benchmark" && unlocked;

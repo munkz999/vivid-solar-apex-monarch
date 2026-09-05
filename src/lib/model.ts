@@ -1,4 +1,4 @@
-import { CLUBS, type ClubId } from "./clubs";
+import { CLUBS, STOCK_LOFTS, type ClubId } from "./clubs";
 
 export const MPH_KEYS = [75, 85, 95, 105, 115] as const;
 
@@ -12,6 +12,8 @@ export const CARRY_TABLE: Record<ClubId, readonly [number, number, number, numbe
   "3h": [140, 160, 180, 198, 216],
   "4h": [135, 153, 172, 190, 209],
   "5h": [128, 146, 164, 181, 198],
+  // 2i extrapolated from 3i↔4i spacing (no separate OEM table row).
+  "2i": [137, 155, 176, 194, 213],
   "3i": [132, 150, 168, 186, 204],
   "4i": [127, 145, 160, 178, 195],
   "5i": [120, 137, 154, 170, 187],
@@ -34,6 +36,7 @@ const OTHER_ROLL: Record<Exclude<ClubId, "dr">, number> = {
   "3h": 13,
   "4h": 12,
   "5h": 11,
+  "2i": 12,
   "3i": 11,
   "4i": 10,
   "5i": 10,
@@ -49,6 +52,14 @@ const OTHER_ROLL: Record<Exclude<ClubId, "dr">, number> = {
 
 export const EFFORT_80 = 0.8 ** 0.88;
 export const REF_LOFT = 10.5;
+
+/**
+ * Light heuristic: ~yd carry per ° vs that club's stock loft
+ * (lower loft than stock → slightly more carry). Not a full ball-flight model.
+ */
+export const LOFT_CARRY_PER_DEG = 1.6;
+/** Extra roll yards per ° below stock loft (lower loft runs out a bit more). */
+export const LOFT_ROLL_PER_DEG = 0.35;
 
 export type WindDir = "ignore" | "head" | "tail" | "cross";
 export type Effort = 80 | 100;
@@ -96,10 +107,17 @@ export function driverLoftAdj(loft: number, mph: number): number {
   return -2.2 * dLoft + 1.4 * dLoft * -((mph - 95) / 20);
 }
 
+/** Carry/roll delta vs STOCK_LOFTS for non-driver clubs. */
+export function stockLoftDelta(clubId: ClubId, loft: number): { carry: number; roll: number } {
+  const std = STOCK_LOFTS[clubId];
+  const d = std - loft; // positive when loft is lower than stock
+  return { carry: d * LOFT_CARRY_PER_DEG, roll: d * LOFT_ROLL_PER_DEG };
+}
+
 export function modelCarryRaw(clubId: ClubId, mph: number, loft: number): number {
   const base = interpolateCarry(clubId, mph);
-  if (clubId !== "dr") return base;
-  return base + driverLoftAdj(loft, mph);
+  if (clubId === "dr") return base + driverLoftAdj(loft, mph);
+  return base + stockLoftDelta(clubId, loft).carry;
 }
 
 export function driverRoll(loft: number): number {
@@ -110,7 +128,9 @@ export function driverRoll(loft: number): number {
 
 export function clubRoll(clubId: ClubId, loft: number): number {
   if (clubId === "dr") return driverRoll(loft);
-  return OTHER_ROLL[clubId];
+  const raw = OTHER_ROLL[clubId] + stockLoftDelta(clubId, loft).roll;
+  const floor = clubId === "gw" || clubId === "sw" || clubId === "lw" || clubId === "pw" ? 5 : 4;
+  return Math.max(floor, raw);
 }
 
 export function weatherParts(c: ConditionsInput) {
@@ -260,6 +280,7 @@ export function fittedMph(
   shots: Array<BenchmarkShot & { kind?: string }>,
   loft: number,
   resolveModelId?: (clubId: string) => ClubId,
+  resolveLoft?: (clubId: string) => number,
 ): number | null {
   const direct = shots.filter((s) => s.kind !== "cascade");
   if (direct.length === 0) return null;
@@ -273,7 +294,8 @@ export function fittedMph(
   for (const [id, carries] of byClub) {
     const avg = carries.reduce((a, b) => a + b, 0) / carries.length;
     const mid = resolveModelId ? resolveModelId(id) : (id as ClubId);
-    sum += impliedMph(mid, avg, loft);
+    const clubLoft = resolveLoft ? resolveLoft(id) : loft;
+    sum += impliedMph(mid, avg, clubLoft);
   }
   return Math.round(sum / byClub.size);
 }

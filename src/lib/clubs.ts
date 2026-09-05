@@ -7,6 +7,7 @@ export type ClubId =
   | "3h"
   | "4h"
   | "5h"
+  | "2i"
   | "3i"
   | "4i"
   | "5i"
@@ -40,7 +41,10 @@ export interface CustomClub {
   group: ClubGroup;
   /** Stock club used for model carry / roll. */
   modelClubId: ClubId;
-  /** Degrees; optional for customs saved before loft was collected. */
+  /**
+   * Degrees at creation — the club's "standard" loft for Reset.
+   * Optional for customs saved before loft was collected.
+   */
   loft?: number;
 }
 
@@ -53,8 +57,10 @@ export interface BagClub {
   modelClubId: ClubId;
   isCustom: boolean;
   defaultOn: boolean;
-  /** Degrees when known (customs with loft; stock from STOCK_LOFTS). */
+  /** Effective loft (°) when known. */
   loft?: number;
+  /** True when a user override differs from the club's standard loft. */
+  loftAdjusted?: boolean;
 }
 
 export const CLUBS: Club[] = [
@@ -66,6 +72,7 @@ export const CLUBS: Club[] = [
   { id: "3h", name: "3H", fullName: "3 Hybrid", group: "hybrids", defaultOn: false },
   { id: "4h", name: "4H", fullName: "4 Hybrid", group: "hybrids", defaultOn: true },
   { id: "5h", name: "5H", fullName: "5 Hybrid", group: "hybrids", defaultOn: false },
+  { id: "2i", name: "2i", fullName: "2 Iron", group: "irons", defaultOn: false },
   { id: "3i", name: "3i", fullName: "3 Iron", group: "irons", defaultOn: false },
   { id: "4i", name: "4i", fullName: "4 Iron", group: "irons", defaultOn: false },
   { id: "5i", name: "5i", fullName: "5 Iron", group: "irons", defaultOn: true },
@@ -80,11 +87,11 @@ export const CLUBS: Club[] = [
 ];
 
 /**
- * Typical stock loft (° ) for bag/chart ordering and nearest-model lookup.
+ * Typical stock loft (°) for bag/chart ordering, nearest-model lookup, and Reset.
  * Industry-ish defaults (OEM midpoints), not player-fitted:
  * Dr 10.5 · 3W 15 · 4W 16.5 · 5W 18 · 7W 21 ·
  * 3H 19 · 4H 22 · 5H 25 ·
- * 3i 21 … PW 46 · GW 50 · SW 54 · LW 58.
+ * 2i 18 · 3i 21 … PW 46 · GW 50 · SW 54 · LW 58.
  */
 export const STOCK_LOFTS: Record<ClubId, number> = {
   dr: 10.5,
@@ -95,6 +102,7 @@ export const STOCK_LOFTS: Record<ClubId, number> = {
   "3h": 19,
   "4h": 22,
   "5h": 25,
+  "2i": 18,
   "3i": 21,
   "4i": 24,
   "5i": 27,
@@ -107,6 +115,9 @@ export const STOCK_LOFTS: Record<ClubId, number> = {
   sw: 54,
   lw: 58,
 };
+
+/** Alias used by Reset / Bag loft UI. */
+export const STANDARD_LOFTS = STOCK_LOFTS;
 
 export const CLUB_BY_ID: Record<ClubId, Club> = Object.fromEntries(
   CLUBS.map((c) => [c.id, c]),
@@ -142,7 +153,7 @@ export const DRIVER_LOFTS = [
 
 export const DEFAULT_LOFT = 10.5;
 
-/** Sensible loft entry range for custom clubs (°). */
+/** Sensible loft entry range for custom clubs / overrides (°). */
 export const CUSTOM_LOFT_MIN = 5;
 export const CUSTOM_LOFT_MAX = 65;
 
@@ -182,7 +193,64 @@ export function loftForSort(club: {
   return STOCK_LOFTS[club.modelClubId];
 }
 
-export function stockAsBagClub(c: Club): BagClub {
+/** Standard loft for Reset: stock → STANDARD_LOFTS; custom → loft at add-time. */
+export function standardLoftFor(
+  id: string,
+  customClubs: CustomClub[] = [],
+): number | undefined {
+  if (isStockClubId(id)) return STOCK_LOFTS[id];
+  const custom = customClubs.find((c) => c.id === id);
+  if (!custom) return undefined;
+  if (typeof custom.loft === "number" && Number.isFinite(custom.loft)) return custom.loft;
+  return STOCK_LOFTS[custom.modelClubId];
+}
+
+export function effectiveClubLoft(
+  id: string,
+  opts: {
+    clubLoftOverrides?: Record<string, number>;
+    customClubs?: CustomClub[];
+    /** Legacy / synced driver loft; used when no `dr` override. */
+    driverLoft?: number;
+  } = {},
+): number {
+  const overrides = opts.clubLoftOverrides ?? {};
+  const customs = opts.customClubs ?? [];
+  const over = overrides[id];
+  if (typeof over === "number" && Number.isFinite(over)) return over;
+
+  if (id === "dr" && typeof opts.driverLoft === "number" && Number.isFinite(opts.driverLoft)) {
+    return opts.driverLoft;
+  }
+
+  const std = standardLoftFor(id, customs);
+  if (typeof std === "number") return std;
+  return DEFAULT_LOFT;
+}
+
+export function isLoftAdjusted(
+  id: string,
+  opts: {
+    clubLoftOverrides?: Record<string, number>;
+    customClubs?: CustomClub[];
+    driverLoft?: number;
+  } = {},
+): boolean {
+  const std = standardLoftFor(id, opts.customClubs ?? []);
+  if (typeof std !== "number") return false;
+  const eff = effectiveClubLoft(id, opts);
+  return Math.abs(eff - std) > 0.049;
+}
+
+export function stockAsBagClub(
+  c: Club,
+  loftOverrides: Record<string, number> = {},
+  driverLoft?: number,
+): BagClub {
+  const loft = effectiveClubLoft(c.id, {
+    clubLoftOverrides: loftOverrides,
+    driverLoft: c.id === "dr" ? driverLoft : undefined,
+  });
   return {
     id: c.id,
     name: c.name,
@@ -191,20 +259,37 @@ export function stockAsBagClub(c: Club): BagClub {
     modelClubId: c.id,
     isCustom: false,
     defaultOn: c.defaultOn,
-    loft: STOCK_LOFTS[c.id],
+    loft,
+    loftAdjusted: isLoftAdjusted(c.id, {
+      clubLoftOverrides: loftOverrides,
+      driverLoft: c.id === "dr" ? driverLoft : undefined,
+    }),
   };
 }
 
-export function customAsBagClub(c: CustomClub): BagClub {
+export function customAsBagClub(
+  c: CustomClub,
+  loftOverrides: Record<string, number> = {},
+): BagClub {
+  const loft = effectiveClubLoft(c.id, {
+    clubLoftOverrides: loftOverrides,
+    customClubs: [c],
+  });
+  const modelClubId =
+    typeof loft === "number" ? modelClubIdFromLoft(c.group, loft) : c.modelClubId;
   return {
     id: c.id,
     name: c.name,
     fullName: c.fullName,
     group: c.group,
-    modelClubId: c.modelClubId,
+    modelClubId,
     isCustom: true,
     defaultOn: true,
-    loft: typeof c.loft === "number" && Number.isFinite(c.loft) ? c.loft : undefined,
+    loft: typeof loft === "number" && Number.isFinite(loft) ? loft : undefined,
+    loftAdjusted: isLoftAdjusted(c.id, {
+      clubLoftOverrides: loftOverrides,
+      customClubs: [c],
+    }),
   };
 }
 
@@ -213,12 +298,20 @@ export function customAsBagClub(c: CustomClub): BagClub {
  * (lower loft = longer club = earlier). Customs interleave with stock.
  * Legacy customs without loft fall back to their model club's stock loft.
  */
-export function bagClubList(customClubs: CustomClub[] = []): BagClub[] {
+export function bagClubList(
+  customClubs: CustomClub[] = [],
+  loftOverrides: Record<string, number> = {},
+  driverLoft?: number,
+): BagClub[] {
   const out: BagClub[] = [];
   for (const g of GROUPS) {
     const groupClubs: BagClub[] = [
-      ...CLUBS.filter((x) => x.group === g.id).map(stockAsBagClub),
-      ...customClubs.filter((x) => x.group === g.id).map(customAsBagClub),
+      ...CLUBS.filter((x) => x.group === g.id).map((c) =>
+        stockAsBagClub(c, loftOverrides, driverLoft),
+      ),
+      ...customClubs
+        .filter((x) => x.group === g.id)
+        .map((c) => customAsBagClub(c, loftOverrides)),
     ];
     groupClubs.sort((a, b) => {
       const d = loftForSort(a) - loftForSort(b);
@@ -232,29 +325,49 @@ export function bagClubList(customClubs: CustomClub[] = []): BagClub[] {
   return out;
 }
 
-export function resolveBagClub(id: string, customClubs: CustomClub[] = []): BagClub | undefined {
-  if (isStockClubId(id)) return stockAsBagClub(CLUB_BY_ID[id]);
+export function resolveBagClub(
+  id: string,
+  customClubs: CustomClub[] = [],
+  loftOverrides: Record<string, number> = {},
+  driverLoft?: number,
+): BagClub | undefined {
+  if (isStockClubId(id)) return stockAsBagClub(CLUB_BY_ID[id], loftOverrides, driverLoft);
   const custom = customClubs.find((c) => c.id === id);
-  return custom ? customAsBagClub(custom) : undefined;
+  return custom ? customAsBagClub(custom, loftOverrides) : undefined;
 }
 
-export function modelClubIdFor(id: string, customClubs: CustomClub[] = []): ClubId {
-  const club = resolveBagClub(id, customClubs);
+export function modelClubIdFor(
+  id: string,
+  customClubs: CustomClub[] = [],
+  loftOverrides: Record<string, number> = {},
+  driverLoft?: number,
+): ClubId {
+  const club = resolveBagClub(id, customClubs, loftOverrides, driverLoft);
   if (club) return club.modelClubId;
   if (isStockClubId(id)) return id;
   return "7i";
 }
 
-export function shortClubLabel(id: string, loft: number, customClubs: CustomClub[] = []): string {
+export function shortClubLabel(
+  id: string,
+  loft: number,
+  customClubs: CustomClub[] = [],
+  loftOverrides: Record<string, number> = {},
+): string {
   if (id === "dr") {
     const t = loft.toFixed(1);
     const loftTxt = t.endsWith(".0") ? t.slice(0, -2) : t;
     return `Dr ${loftTxt}°`;
   }
-  return resolveBagClub(id, customClubs)?.name ?? id;
+  return resolveBagClub(id, customClubs, loftOverrides)?.name ?? id;
 }
 
 export function formatLoftDeg(loft: number): string {
   const t = loft.toFixed(1);
   return t.endsWith(".0") ? `${t.slice(0, -2)}°` : `${t}°`;
+}
+
+export function clampClubLoft(n: number): number {
+  const x = Math.round(n * 2) / 2; // 0.5° steps
+  return Math.min(CUSTOM_LOFT_MAX, Math.max(CUSTOM_LOFT_MIN, x));
 }

@@ -11,6 +11,7 @@ export function ChartTab() {
   const enabledClubs = useBagStore((s) => s.enabledClubs);
   const customClubs = useBagStore((s) => s.customClubs);
   const driverLoft = useBagStore((s) => s.driverLoft);
+  const clubLoftOverrides = useBagStore((s) => s.clubLoftOverrides);
   const benchmarks = useBagStore((s) => s.benchmarks);
   const useConditions = useBagStore((s) => s.useConditions);
   const weather = useBagStore((s) => s.weather);
@@ -42,6 +43,7 @@ export function ChartTab() {
     benchmarks: isFit ? benchmarks : [],
     lockSpeed: isFit,
     customClubs,
+    clubLoftOverrides,
   });
   const flightPct = conditions ? Math.round(weatherMultiplier(conditions) * 100) : null;
   const yoursCount = rows.filter((r) => r.isYours).length;

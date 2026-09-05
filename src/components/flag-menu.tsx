@@ -194,7 +194,7 @@ function InstructionsBody() {
             Use <span className="text-ink">Hold</span> to keep existing custom shot data on clubs below, or{" "}
             <span className="text-ink">Overwrite</span> to replace that range for a full chart rebuild.
           </li>
-          <li>Add custom clubs (driving iron, utility, etc.) from <span className="text-ink">Bag</span> with name, loft, and category so they sort into the right group on Bag and Chart.</li>
+          <li>Add custom clubs (driving iron, utility, etc.) from <span className="text-ink">Bag</span> with name, loft, and category so they sort into the right group on Bag and Chart. Stock clubs also show loft — adjust only if you know your true lofts (confirm warning); Reset restores standards.</li>
         </ul>
       </section>
       <section>
@@ -212,7 +212,7 @@ function InstructionsBody() {
             <span className="text-ink">Chart</span> — your bag card; print or save an image for the course.
           </li>
           <li>
-            <span className="text-ink">Bag</span> — which clubs are in play, driver loft, and custom clubs.
+            <span className="text-ink">Bag</span> — which clubs are in play, per-club lofts (driver uses a simple menu), Adjust with a confirm warning, Reset to standards, and custom clubs.
           </li>
           <li>
             <span className="text-ink">Log</span> — swing speed and benchmark shots (Pro).
@@ -262,6 +262,10 @@ function FaqBody() {
     {
       q: "Hold vs Overwrite on Whole chart?",
       a: "Hold keeps custom shot data already logged on clubs in the range below. Overwrite replaces that range so the full chart can adjust from the shot you’re logging.",
+    },
+    {
+      q: "Can I change club lofts?",
+      a: "Yes — on Bag, tap a loft or Adjust. You’ll get a warning before anything saves: only change lofts if you’re certain. Driver loft is a simple menu (not pill buttons). Reset all lofts restores stock standards; custom clubs keep the loft you entered when you added them. Loft affects Chart ordering and modeled carry/roll.",
     },
     {
       q: "Location and weather?",

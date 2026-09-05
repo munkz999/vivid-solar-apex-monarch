@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import {
   bagClubList,
+  effectiveClubLoft,
   resolveBagClub,
 } from "@/lib/clubs";
 import { clubRoll, modelCarryRaw, weatherMultiplier, type ConditionsInput } from "@/lib/model";
@@ -40,6 +41,7 @@ export function BenchmarkTab() {
   const customClubs = useBagStore((s) => s.customClubs);
   const mph = useBagStore(currentMph);
   const loft = useBagStore((s) => s.driverLoft);
+  const clubLoftOverrides = useBagStore((s) => s.clubLoftOverrides);
   const logShot = useBagStore((s) => s.logShot);
   const remove = useBagStore((s) => s.deleteBenchmark);
   const clear = useBagStore((s) => s.clearBenchmarks);
@@ -59,8 +61,8 @@ export function BenchmarkTab() {
   const applyManualMph = useBagStore((s) => s.applyManualMph);
   const manualMph = useBagStore((s) => s.manualMph);
   const inBag = useMemo(
-    () => bagClubList(customClubs).filter((c) => enabled[c.id]),
-    [customClubs, enabled],
+    () => bagClubList(customClubs, clubLoftOverrides, loft).filter((c) => enabled[c.id]),
+    [customClubs, clubLoftOverrides, loft, enabled],
   );
   const [confirmClear, setConfirmClear] = useState(false);
   const [savedFlash, setSavedFlash] = useState<string | null>(null);
@@ -70,7 +72,7 @@ export function BenchmarkTab() {
   const carry = draft.carry;
   const total = draft.total;
   const activeClub = inBag.some((c) => c.id === clubId) ? clubId : (inBag[0]?.id ?? "dr");
-  const activeMeta = resolveBagClub(activeClub, customClubs);
+  const activeMeta = resolveBagClub(activeClub, customClubs, clubLoftOverrides, loft);
   const carryN = Number(carry);
   const totalN = Number(total);
   const canSave =
@@ -115,8 +117,13 @@ export function BenchmarkTab() {
   }, [activeClub]);
 
   const modelId = activeMeta?.modelClubId ?? "dr";
-  const modelCarry = modelCarryRaw(modelId, mph, loft);
-  const modelTotal = modelCarry + clubRoll(modelId, loft);
+  const activeLoft = effectiveClubLoft(activeClub, {
+    clubLoftOverrides,
+    customClubs,
+    driverLoft: loft,
+  });
+  const modelCarry = modelCarryRaw(modelId, mph, activeLoft);
+  const modelTotal = modelCarry + clubRoll(modelId, activeLoft);
   const shotCount = list.filter((b) => b.clubId === activeClub && isDirectShot(b)).length;
 
   const activeIdx = inBag.findIndex((c) => c.id === activeClub);
@@ -200,6 +207,7 @@ export function BenchmarkTab() {
     benchmarks: list,
     lockSpeed: true,
     customClubs,
+    clubLoftOverrides,
   });
 
   function holdOverwriteCopy() {
@@ -445,10 +453,15 @@ export function BenchmarkTab() {
         ) : (
           <ul className="overflow-hidden rounded-xl bg-surface shadow-panel">
             {logEntries.map((b, i) => {
-              const club = resolveBagClub(b.clubId, customClubs);
+              const club = resolveBagClub(b.clubId, customClubs, clubLoftOverrides, loft);
               const shown = shownYards(b, wx, rollWx);
               const mid = club?.modelClubId ?? "7i";
-              const modelThen = modelCarryRaw(mid, b.driverMph, loft);
+              const entryLoft = effectiveClubLoft(b.clubId, {
+                clubLoftOverrides,
+                customClubs,
+                driverLoft: loft,
+              });
+              const modelThen = modelCarryRaw(mid, b.driverMph, entryLoft);
               const vs = b.carry - modelThen;
               const roll = shown.total != null ? Math.max(0, shown.total - shown.carry) : null;
               const cascaded = list.filter(

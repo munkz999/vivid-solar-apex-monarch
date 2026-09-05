@@ -1,5 +1,6 @@
 import {
   bagClubList,
+  effectiveClubLoft,
   shortClubLabel,
   type BagClub,
   type CustomClub,
@@ -85,29 +86,39 @@ export function resolveYours(
 export function buildChart(opts: {
   enabledClubs: Record<string, boolean>;
   mph: number;
+  /** Driver loft (header / Dr label); per-club loft comes from overrides when present. */
   loft: number;
   effort: Effort;
   conditions: ConditionsInput | null;
   benchmarks: Benchmark[];
   lockSpeed?: boolean;
   customClubs?: CustomClub[];
+  clubLoftOverrides?: Record<string, number>;
 }): ChartRow[] {
   const lockSpeed = opts.lockSpeed ?? false;
   const customs = opts.customClubs ?? [];
-  const clubs = bagClubList(customs).filter((c) => opts.enabledClubs[c.id]);
+  const overrides = opts.clubLoftOverrides ?? {};
+  const clubs = bagClubList(customs, overrides, opts.loft).filter(
+    (c) => opts.enabledClubs[c.id],
+  );
   return clubs.map((club) => {
+    const clubLoft = effectiveClubLoft(club.id, {
+      clubLoftOverrides: overrides,
+      customClubs: customs,
+      driverLoft: opts.loft,
+    });
     const fit = resolveYours(
       opts.benchmarks,
       club.id,
       opts.mph,
-      opts.loft,
+      clubLoft,
       lockSpeed,
       club.modelClubId,
     );
     const row = computeYardage({
       clubId: club.id,
       mph: opts.mph,
-      loft: opts.loft,
+      loft: clubLoft,
       effort: opts.effort,
       conditions: opts.conditions,
       modelClubId: club.modelClubId,
@@ -120,7 +131,7 @@ export function buildChart(opts: {
           }
         : null,
     });
-    const label = shortClubLabel(club.id, opts.loft, customs);
+    const label = shortClubLabel(club.id, clubLoft, customs, overrides);
     return {
       ...row,
       shotCount: fit?.count ?? 0,

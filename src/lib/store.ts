@@ -2,12 +2,15 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import {
   bagClubList,
+  clampClubLoft,
   DEFAULT_ENABLED,
   DEFAULT_LOFT,
+  effectiveClubLoft,
   modelClubIdFor,
   modelClubIdFromLoft,
   newCustomClubId,
   resolveBagClub,
+  STANDARD_LOFTS,
   CUSTOM_CATEGORIES,
   CUSTOM_LOFT_MAX,
   CUSTOM_LOFT_MIN,
@@ -78,7 +81,14 @@ interface BagState {
   gender: Gender;
   enabledClubs: Record<string, boolean>;
   customClubs: CustomClub[];
+  /** Synced with clubLoftOverrides.dr / STANDARD_LOFTS.dr for chart header. */
   driverLoft: number;
+  /**
+   * User loft overrides vs standard.
+   * Stock: vs STANDARD_LOFTS. Custom: vs loft saved at add-time (CustomClub.loft).
+   * Missing key → use standard. Reset clears this map.
+   */
+  clubLoftOverrides: Record<string, number>;
   benchmarks: Benchmark[];
   useConditions: boolean;
   weather: WeatherState | null;
@@ -94,6 +104,8 @@ interface BagState {
   setGender: (gender: Gender) => void;
   toggleClub: (id: string) => void;
   setDriverLoft: (loft: number) => void;
+  setClubLoft: (id: string, loft: number) => void;
+  resetClubLofts: () => void;
   addCustomClub: (input: {
     name: string;
     fullName?: string;
@@ -149,6 +161,36 @@ function normalizeClubName(raw: string) {
   return raw.trim().replace(/\s+/g, " ").slice(0, 24);
 }
 
+function loftOpts(state: {
+  clubLoftOverrides: Record<string, number>;
+  customClubs: CustomClub[];
+  driverLoft: number;
+}) {
+  return {
+    clubLoftOverrides: state.clubLoftOverrides,
+    customClubs: state.customClubs,
+    driverLoft: state.driverLoft,
+  };
+}
+
+function syncDriverFromOverrides(
+  overrides: Record<string, number>,
+  fallbackDriver: number,
+): { clubLoftOverrides: Record<string, number>; driverLoft: number } {
+  const next = { ...overrides };
+  const dr = next.dr;
+  if (typeof dr === "number" && Number.isFinite(dr)) {
+    const loft = clampClubLoft(dr);
+    if (Math.abs(loft - STANDARD_LOFTS.dr) < 0.049) {
+      delete next.dr;
+      return { clubLoftOverrides: next, driverLoft: STANDARD_LOFTS.dr };
+    }
+    next.dr = loft;
+    return { clubLoftOverrides: next, driverLoft: loft };
+  }
+  return { clubLoftOverrides: next, driverLoft: fallbackDriver };
+}
+
 const persistStorage = createJSONStorage(() => {
   if (typeof window === "undefined") {
     return {
@@ -169,6 +211,7 @@ export const useBagStore = create<BagState>()(
       enabledClubs: { ...DEFAULT_ENABLED },
       customClubs: [],
       driverLoft: DEFAULT_LOFT,
+      clubLoftOverrides: {},
       benchmarks: [],
       useConditions: false,
       weather: null,
@@ -184,7 +227,44 @@ export const useBagStore = create<BagState>()(
       setGender: (gender) => set({ gender }),
       toggleClub: (id) =>
         set({ enabledClubs: { ...get().enabledClubs, [id]: !get().enabledClubs[id] } }),
-      setDriverLoft: (loft) => set({ driverLoft: loft }),
+      setDriverLoft: (loft) => {
+        const nextLoft = clampClubLoft(loft);
+        const state = get();
+        const overrides = { ...state.clubLoftOverrides };
+        if (Math.abs(nextLoft - STANDARD_LOFTS.dr) < 0.049) {
+          delete overrides.dr;
+        } else {
+          overrides.dr = nextLoft;
+        }
+        set({ driverLoft: nextLoft, clubLoftOverrides: overrides });
+      },
+      setClubLoft: (id, loft) => {
+        const nextLoft = clampClubLoft(loft);
+        const state = get();
+        if (id === "dr") {
+          get().setDriverLoft(nextLoft);
+          return;
+        }
+        const overrides = { ...state.clubLoftOverrides };
+        const std = (() => {
+          if (id in STANDARD_LOFTS) return STANDARD_LOFTS[id as ClubId];
+          const custom = state.customClubs.find((c) => c.id === id);
+          if (custom && typeof custom.loft === "number") return custom.loft;
+          if (custom) return STANDARD_LOFTS[custom.modelClubId];
+          return undefined;
+        })();
+        if (typeof std === "number" && Math.abs(nextLoft - std) < 0.049) {
+          delete overrides[id];
+        } else {
+          overrides[id] = nextLoft;
+        }
+        set({ clubLoftOverrides: overrides });
+      },
+      resetClubLofts: () =>
+        set({
+          clubLoftOverrides: {},
+          driverLoft: STANDARD_LOFTS.dr,
+        }),
       addCustomClub: ({ name, fullName, category, loft }) => {
         const cat = CUSTOM_CATEGORIES.find((c) => c.id === category);
         if (!cat) return null;
@@ -217,6 +297,8 @@ export const useBagStore = create<BagState>()(
         const state = get();
         const enabledClubs = { ...state.enabledClubs };
         delete enabledClubs[id];
+        const overrides = { ...state.clubLoftOverrides };
+        delete overrides[id];
         const nextDraft =
           state.fitDraft.clubId === id
             ? { ...state.fitDraft, clubId: "dr", carry: "", total: "" }
@@ -224,6 +306,7 @@ export const useBagStore = create<BagState>()(
         set({
           customClubs: state.customClubs.filter((c) => c.id !== id),
           enabledClubs,
+          clubLoftOverrides: overrides,
           benchmarks: state.benchmarks.filter((b) => b.clubId !== id && b.fromClubId !== id),
           fitDraft: nextDraft,
         });
@@ -240,20 +323,36 @@ export const useBagStore = create<BagState>()(
         const cascades: Benchmark[] = [];
         let held = 0;
         let overwritten = 0;
-        const ordered = bagClubList(state.customClubs);
+        const ordered = bagClubList(
+          state.customClubs,
+          state.clubLoftOverrides,
+          state.driverLoft,
+        );
+        const optsLoft = loftOpts(state);
         if (opts.wholeChart) {
-          const loft = state.driverLoft;
-          const srcModel = modelClubIdFor(b.clubId, state.customClubs);
-          const modelSrc = modelCarryRaw(srcModel, b.driverMph, loft);
+          const srcLoft = effectiveClubLoft(b.clubId, optsLoft);
+          const srcModel = modelClubIdFor(
+            b.clubId,
+            state.customClubs,
+            state.clubLoftOverrides,
+            state.driverLoft,
+          );
+          const modelSrc = modelCarryRaw(srcModel, b.driverMph, srcLoft);
           const raw = modelSrc === 0 ? 1 : b.carry / modelSrc;
           const scale = Math.min(CASCADE_MAX, Math.max(CASCADE_MIN, raw));
-          const srcRoll = clubRoll(srcModel, loft);
+          const srcRoll = clubRoll(srcModel, srcLoft);
           const loggedRoll = Math.max(0, (b.total ?? b.carry + srcRoll) - b.carry);
           const rollScale =
             srcRoll <= 0 ? 1 : Math.min(ROLL_MAX, Math.max(ROLL_MIN, loggedRoll / srcRoll));
           const idx = ordered.findIndex((c) => c.id === b.clubId);
           const below = ordered.slice(idx + 1).filter((c) => state.enabledClubs[c.id]);
-          const srcName = resolveBagClub(b.clubId, state.customClubs)?.name ?? b.clubId;
+          const srcName =
+            resolveBagClub(
+              b.clubId,
+              state.customClubs,
+              state.clubLoftOverrides,
+              state.driverLoft,
+            )?.name ?? b.clubId;
           for (const c of below) {
             const hasDirect = rest.some((x) => x.clubId === c.id && isDirectShot(x));
             if (hasDirect && !opts.overwrite) {
@@ -264,8 +363,9 @@ export const useBagStore = create<BagState>()(
               overwritten += 1;
               rest = rest.filter((x) => x.clubId !== c.id);
             }
-            const cCarry = modelCarryRaw(c.modelClubId, b.driverMph, loft) * scale;
-            const cRoll = clubRoll(c.modelClubId, loft) * rollScale;
+            const cLoft = effectiveClubLoft(c.id, optsLoft);
+            const cCarry = modelCarryRaw(c.modelClubId, b.driverMph, cLoft) * scale;
+            const cRoll = clubRoll(c.modelClubId, cLoft) * rollScale;
             cascades.push({
               id: newId(),
               clubId: c.id,
@@ -357,6 +457,7 @@ export const useBagStore = create<BagState>()(
         enabledClubs: s.enabledClubs,
         customClubs: s.customClubs,
         driverLoft: s.driverLoft,
+        clubLoftOverrides: s.clubLoftOverrides,
         benchmarks: s.benchmarks,
         useConditions: s.useConditions,
         weather: s.weather,
@@ -368,7 +469,7 @@ export const useBagStore = create<BagState>()(
         fitDraft: s.fitDraft,
         manualMph: s.manualMph,
       }),
-      version: 6,
+      version: 7,
       migrate: (persisted, version) => {
         const s = persisted as Record<string, unknown>;
         if (version < 2) {
@@ -408,6 +509,29 @@ export const useBagStore = create<BagState>()(
           delete s.manualClubYards;
           if (!Array.isArray(s.customClubs)) s.customClubs = [];
         }
+        if (version < 7) {
+          const overrides =
+            s.clubLoftOverrides && typeof s.clubLoftOverrides === "object"
+              ? { ...(s.clubLoftOverrides as Record<string, number>) }
+              : {};
+          const drLoft =
+            typeof s.driverLoft === "number" && Number.isFinite(s.driverLoft)
+              ? (s.driverLoft as number)
+              : DEFAULT_LOFT;
+          if (Math.abs(drLoft - STANDARD_LOFTS.dr) >= 0.049) {
+            overrides.dr = drLoft;
+          }
+          const synced = syncDriverFromOverrides(overrides, drLoft);
+          s.clubLoftOverrides = synced.clubLoftOverrides;
+          s.driverLoft = synced.driverLoft;
+          // Ensure new 2i defaults off if missing from enabled map.
+          const enabled = {
+            ...DEFAULT_ENABLED,
+            ...((s.enabledClubs as Record<string, boolean>) ?? {}),
+          };
+          if (enabled["2i"] === undefined) enabled["2i"] = false;
+          s.enabledClubs = enabled;
+        }
         return s;
       },
     },
@@ -421,11 +545,23 @@ export function currentMph(s: {
   benchmarks: Benchmark[];
   manualMph?: number | null;
   customClubs?: CustomClub[];
+  clubLoftOverrides?: Record<string, number>;
 }): number {
   if (s.speedPreset === "fit") {
     const customs = s.customClubs ?? [];
+    const overrides = s.clubLoftOverrides ?? {};
     return (
-      fittedMph(s.benchmarks, s.driverLoft, (id) => modelClubIdFor(id, customs)) ??
+      fittedMph(
+        s.benchmarks,
+        s.driverLoft,
+        (id) => modelClubIdFor(id, customs, overrides, s.driverLoft),
+        (id) =>
+          effectiveClubLoft(id, {
+            clubLoftOverrides: overrides,
+            customClubs: customs,
+            driverLoft: s.driverLoft,
+          }),
+      ) ??
       s.manualMph ??
       PRESET_MPH[s.gender].avg
     );
