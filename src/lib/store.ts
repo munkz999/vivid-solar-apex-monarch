@@ -22,9 +22,9 @@ export type ShotKind = "shot" | "cascade";
 
 export const SPEED_PRESETS: { id: SpeedPreset; label: string }[] = [
   { id: "sr", label: "Sr" },
-  { id: "slow", label: "Slow" },
-  { id: "avg", label: "Avg" },
-  { id: "pro", label: "Pro" },
+  { id: "slow", label: "High" },
+  { id: "avg", label: "Mid" },
+  { id: "pro", label: "Low" },
   { id: "fit", label: "Custom" },
 ];
 

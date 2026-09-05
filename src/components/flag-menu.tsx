@@ -15,7 +15,6 @@ const FEEDBACK_CATS = [
 type FeedbackCat = (typeof FEEDBACK_CATS)[number]["id"];
 
 const FEEDBACK_KEY = "bag-chart-feedback-v1";
-const FEEDBACK_EMAIL = "tyler.tamburin@outlook.com";
 
 function storeFeedbackLocally(entry: {
   category: FeedbackCat;
@@ -30,20 +29,6 @@ function storeFeedbackLocally(entry: {
   } catch {
     /* ignore quota / private mode */
   }
-}
-
-function buildMailto(category: FeedbackCat, message: string) {
-  const label = FEEDBACK_CATS.find((c) => c.id === category)?.label ?? category;
-  const subject = `Bag Chart feedback — ${label}`;
-  const body = [
-    `Category: ${label}`,
-    "",
-    message.trim(),
-    "",
-    `—`,
-    `Sent from Bag Chart · ${new Date().toISOString()}`,
-  ].join("\n");
-  return `mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
 function SheetFrame({
@@ -100,51 +85,23 @@ function FeedbackForm({
   const [status, setStatus] = useState<string | null>(null);
   const canSend = message.trim().length >= 3;
 
-  async function submit() {
+  function submit() {
     if (!canSend) return;
     const entry = { category, message: message.trim(), at: Date.now() };
     storeFeedbackLocally(entry);
     console.info("[bag-chart feedback]", entry);
-
-    const mailto = buildMailto(category, message);
-    let opened = false;
-    try {
-      const a = document.createElement("a");
-      a.href = mailto;
-      a.rel = "noopener";
-      a.style.display = "none";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      opened = true;
-    } catch {
-      opened = false;
-    }
-
-    if (!opened) {
-      try {
-        await navigator.clipboard.writeText(
-          `To: ${FEEDBACK_EMAIL}\n\n${entry.message}\n\n(${FEEDBACK_CATS.find((c) => c.id === category)?.label})`,
-        );
-        setStatus("Saved locally and copied — paste into an email to tyler.tamburin@outlook.com.");
-        window.setTimeout(() => onDone("Thanks — feedback copied"), 900);
-        return;
-      } catch {
-        setStatus("Saved on this device. Email tyler.tamburin@outlook.com if you can.");
-        window.setTimeout(() => onDone("Thanks — feedback saved"), 900);
-        return;
-      }
-    }
-
-    setStatus("Opening email… Thanks for helping improve Bag Chart.");
-    window.setTimeout(() => onDone("Thanks for the feedback"), 700);
+    setStatus("Thanks — your feedback was saved on this device. We’ll review it soon.");
+    window.setTimeout(
+      () => onDone("Thanks — your feedback was saved on this device. We’ll review it soon."),
+      700,
+    );
   }
 
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted">
-        Tell Tyler what’s broken, confusing, or missing. Feedback is saved on this device and opens
-        an email when possible.
+        Tell us what’s broken, confusing, or missing. Feedback is saved on this device for now —
+        we’ll add a shared inbox soon.
       </p>
       <Field label="Category">
         <div className="-mx-1 flex flex-wrap gap-1.5 px-1">
@@ -191,9 +148,10 @@ function InstructionsBody() {
       <section>
         <h3 className="font-medium text-ink">Swing speed presets</h3>
         <p className="mt-1">
-          <span className="text-ink">Sr</span>, <span className="text-ink">Slow</span>,{" "}
-          <span className="text-ink">Avg</span>, and <span className="text-ink">Pro</span> are stock
-          templates. They never change from your logged shots.
+          <span className="text-ink">Sr</span>, <span className="text-ink">High</span>{" "}
+          (high handicap), <span className="text-ink">Mid</span>, and{" "}
+          <span className="text-ink">Low</span> (low handicap) are stock templates. They never change
+          from your logged shots.
         </p>
       </section>
       <section>
@@ -267,14 +225,14 @@ function FaqBody() {
     },
     {
       q: "How do I submit feedback or report a bug?",
-      a: "Tap the flag (top left) → Submit feedback. Pick a category, write a short note, and Submit. We’ll open email to tyler.tamburin@outlook.com when the device allows.",
+      a: "Tap the flag (top left) → Submit feedback. Pick a category, write a short note, and Submit. Your note is saved on this device for now — we’ll review it soon.",
     },
     {
       q: "What does Unlock Pro include?",
       a: "A one-time unlock for Custom speed, Log, and Conditions. Use Restore purchase on the paywall if you already bought it on this Apple ID.",
     },
     {
-      q: "Custom vs Sr / Slow / Avg / Pro?",
+      q: "Custom vs Sr / High / Mid / Low?",
       a: "Presets are stock templates. Custom is your fitted chart from entered speed and logged shots; presets stay unchanged.",
     },
     {

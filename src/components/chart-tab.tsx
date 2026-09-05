@@ -3,7 +3,7 @@ import { Printer, Share } from "lucide-react";
 import { weatherMultiplier } from "@/lib/model";
 import { buildChart, fmtYd, loftLabel, roundConditions } from "@/lib/chart";
 import { saveBagCardPng } from "@/lib/bag-card";
-import { currentMph, useBagStore } from "@/lib/store";
+import { currentMph, presetLabel, useBagStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { GhostButton, PrimaryButton } from "./ui";
 
@@ -157,7 +157,7 @@ export function ChartTab() {
       <p className="no-print px-1 text-center text-xs text-faint">
         {isFit
           ? `${mph} mph club speed. To fine tune, enter benchmark shots in Log.`
-          : `${preset === "sr" ? "Sr" : preset[0].toUpperCase() + preset.slice(1)} template · ${mph} mph`}
+          : `${presetLabel(preset)} template · ${mph} mph`}
         {useConditions ? " · conditions on" : ""}
       </p>
     </div>
