@@ -1,5 +1,5 @@
 import { CloudSun, Crosshair, Flag, LayoutList, Briefcase, Lock } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { bagClubList } from "@/lib/clubs";
 import { currentMph, SPEED_PRESETS, useBagStore, type Gender, type TabId } from "@/lib/store";
 import { isProTab, requestNativePurchase, requestNativeRestore, setUnlock, useNativeUnlockListener, useUnlock } from "@/lib/unlock";
@@ -10,6 +10,7 @@ import { BagTab } from "./bag-tab";
 import { BenchmarkTab } from "./benchmark-tab";
 import { RoundTab } from "./round-tab";
 import { CourseStingButton } from "./course-sting-button";
+import { FlagMenuSheets, type FlagSheet } from "./flag-menu";
 
 const TABS: { id: TabId; label: string; icon: typeof LayoutList }[] = [
   { id: "chart", label: "Chart", icon: LayoutList },
@@ -18,8 +19,9 @@ const TABS: { id: TabId; label: string; icon: typeof LayoutList }[] = [
   { id: "round", label: "Conditions", icon: CloudSun },
 ];
 
-const TAP_WINDOW_MS = 800;
+const LONG_PRESS_MS = 650;
 const DEV_TOAST_MS = 1600;
+const TITLE_TAP_WINDOW_MS = 800;
 
 export function AppShell() {
   const tab = useBagStore((s) => s.tab);
@@ -34,10 +36,13 @@ export function AppShell() {
   useNativeUnlockListener();
   const onFit = tab === "benchmark" && unlocked;
   const mainRef = useRef<HTMLElement>(null);
-  const tapCount = useRef(0);
-  const tapTimer = useRef<ReturnType<typeof window.setTimeout> | undefined>(undefined);
+  const longPressTimer = useRef<number | undefined>(undefined);
+  const longPressFired = useRef(false);
+  const titleTapCount = useRef(0);
+  const titleTapTimer = useRef<number | undefined>(undefined);
   const [paywallFor, setPaywallFor] = useState<TabId | "fit" | null>(null);
   const [devToast, setDevToast] = useState<string | null>(null);
+  const [flagSheet, setFlagSheet] = useState<FlagSheet>(null);
 
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0 });
@@ -62,7 +67,8 @@ export function AppShell() {
 
   useEffect(() => {
     return () => {
-      if (tapTimer.current != null) window.clearTimeout(tapTimer.current);
+      if (longPressTimer.current != null) window.clearTimeout(longPressTimer.current);
+      if (titleTapTimer.current != null) window.clearTimeout(titleTapTimer.current);
     };
   }, []);
 
@@ -84,19 +90,53 @@ export function AppShell() {
     else if (next) setTab(next);
   }
 
-  function onFlagTap() {
-    tapCount.current += 1;
-    window.clearTimeout(tapTimer.current);
-    tapTimer.current = window.setTimeout(() => {
-      tapCount.current = 0;
-    }, TAP_WINDOW_MS);
-    if (tapCount.current < 5) return;
-    tapCount.current = 0;
+  function toggleDemoPro() {
     const next = !unlocked;
     setUnlock(next);
     setPaywallFor(null);
     setDevToast(next ? "Pro on" : "Pro off");
     window.setTimeout(() => setDevToast(null), DEV_TOAST_MS);
+  }
+
+  function onMenuTitleDemoTap() {
+    titleTapCount.current += 1;
+    window.clearTimeout(titleTapTimer.current);
+    titleTapTimer.current = window.setTimeout(() => {
+      titleTapCount.current = 0;
+    }, TITLE_TAP_WINDOW_MS);
+    if (titleTapCount.current < 5) return;
+    titleTapCount.current = 0;
+    toggleDemoPro();
+  }
+
+  function clearLongPress() {
+    if (longPressTimer.current != null) window.clearTimeout(longPressTimer.current);
+    longPressTimer.current = undefined;
+  }
+
+  function onFlagPointerDown() {
+    longPressFired.current = false;
+    clearLongPress();
+    longPressTimer.current = window.setTimeout(() => {
+      longPressFired.current = true;
+      toggleDemoPro();
+    }, LONG_PRESS_MS);
+  }
+
+  function onFlagPointerUp() {
+    const wasLong = longPressFired.current;
+    clearLongPress();
+    if (wasLong) return;
+    setFlagSheet((s) => (s ? null : "menu"));
+  }
+
+  function onFlagPointerCancel() {
+    clearLongPress();
+  }
+
+  function onFlagClick(e: ReactMouseEvent) {
+    // Pointer handlers own open/toggle; suppress synthetic click after touch.
+    e.preventDefault();
   }
 
   return (
@@ -107,8 +147,14 @@ export function AppShell() {
             <div className="flex items-center gap-2.5">
               <button
                 type="button"
-                onClick={onFlagTap}
-                aria-label="Bag Chart"
+                onPointerDown={onFlagPointerDown}
+                onPointerUp={onFlagPointerUp}
+                onPointerCancel={onFlagPointerCancel}
+                onPointerLeave={onFlagPointerCancel}
+                onClick={onFlagClick}
+                aria-label="Menu"
+                aria-haspopup="dialog"
+                aria-expanded={flagSheet != null}
                 className="flex size-9 items-center justify-center rounded-md bg-surface text-gold shadow-panel"
               >
                 <Flag className="size-4" strokeWidth={2.2} />
@@ -219,6 +265,17 @@ export function AppShell() {
             })}
           </ul>
         </nav>
+
+        <FlagMenuSheets
+          sheet={flagSheet}
+          setSheet={setFlagSheet}
+          onDemoToggle={onMenuTitleDemoTap}
+          toast={devToast}
+          onThanks={(msg) => {
+            setDevToast(msg);
+            window.setTimeout(() => setDevToast(null), DEV_TOAST_MS);
+          }}
+        />
 
         {paywallFor ? (
           <div
