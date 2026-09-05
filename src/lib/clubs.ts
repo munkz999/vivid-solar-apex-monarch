@@ -247,10 +247,13 @@ export function stockAsBagClub(
   loftOverrides: Record<string, number> = {},
   driverLoft?: number,
 ): BagClub {
-  const loft = effectiveClubLoft(c.id, {
+  // Always pass driverLoft: effectiveClubLoft only applies it for `dr`
+  // (overrides still win). Ensures synced header loft sorts/labels correctly.
+  const loftOpts = {
     clubLoftOverrides: loftOverrides,
-    driverLoft: c.id === "dr" ? driverLoft : undefined,
-  });
+    driverLoft,
+  };
+  const loft = effectiveClubLoft(c.id, loftOpts);
   return {
     id: c.id,
     name: c.name,
@@ -260,10 +263,7 @@ export function stockAsBagClub(
     isCustom: false,
     defaultOn: c.defaultOn,
     loft,
-    loftAdjusted: isLoftAdjusted(c.id, {
-      clubLoftOverrides: loftOverrides,
-      driverLoft: c.id === "dr" ? driverLoft : undefined,
-    }),
+    loftAdjusted: isLoftAdjusted(c.id, loftOpts),
   };
 }
 
@@ -313,10 +313,11 @@ export function bagClubList(
         .filter((x) => x.group === g.id)
         .map((c) => customAsBagClub(c, loftOverrides)),
     ];
+    // Primary: effective loft ascending (overrides + synced driver loft via
+    // stockAsBagClub / customAsBagClub). Name is last-resort only.
     groupClubs.sort((a, b) => {
       const d = loftForSort(a) - loftForSort(b);
       if (d !== 0) return d;
-      // Stable-ish: stock before custom on exact loft tie, then name.
       if (a.isCustom !== b.isCustom) return a.isCustom ? 1 : -1;
       return a.name.localeCompare(b.name);
     });

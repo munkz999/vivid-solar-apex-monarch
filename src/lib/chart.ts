@@ -1,8 +1,11 @@
 import {
+  GROUPS,
   bagClubList,
   effectiveClubLoft,
+  loftForSort,
   shortClubLabel,
   type BagClub,
+  type ClubGroup,
   type CustomClub,
 } from "./clubs";
 import {
@@ -30,6 +33,49 @@ export interface ChartRow extends Yardage {
   label: string;
   fitOrigin: FitOrigin;
   fromClubId?: string;
+  /** Bag section — Woods / Hybrids / Irons / Wedges. */
+  group: ClubGroup;
+  /** Effective loft used for yardage + section sort (°). */
+  loft: number;
+  isCustom: boolean;
+  name: string;
+}
+
+export interface ChartSection {
+  id: ClubGroup;
+  label: string;
+  rows: ChartRow[];
+}
+
+/** Group chart rows into Bag GROUPS order; empty sections omitted. */
+export function chartSections(rows: ChartRow[]): ChartSection[] {
+  return GROUPS.map((g) => ({
+    id: g.id,
+    label: g.label,
+    rows: rows.filter((r) => r.group === g.id),
+  })).filter((s) => s.rows.length > 0);
+}
+
+/** Loft asc within section; stock before custom; name last-resort only. */
+export function compareClubsByLoft(a: BagClub, b: BagClub): number {
+  const d = loftForSort(a) - loftForSort(b);
+  if (d !== 0) return d;
+  if (a.isCustom !== b.isCustom) return a.isCustom ? 1 : -1;
+  return a.name.localeCompare(b.name);
+}
+
+/**
+ * After bagClubList + enable filter: re-group by club.group and re-sort each
+ * group by effective loft. Never uses name/id as the primary key.
+ */
+export function orderClubsForChart(clubs: BagClub[]): BagClub[] {
+  const out: BagClub[] = [];
+  for (const g of GROUPS) {
+    const groupClubs = clubs.filter((c) => c.group === g.id);
+    groupClubs.sort(compareClubsByLoft);
+    out.push(...groupClubs);
+  }
+  return out;
 }
 
 export function roundConditions(opts: {
@@ -98,9 +144,11 @@ export function buildChart(opts: {
   const lockSpeed = opts.lockSpeed ?? false;
   const customs = opts.customClubs ?? [];
   const overrides = opts.clubLoftOverrides ?? {};
-  const clubs = bagClubList(customs, overrides, opts.loft).filter(
+  const enabled = bagClubList(customs, overrides, opts.loft).filter(
     (c) => opts.enabledClubs[c.id],
   );
+  // Bulletproof: group by section, sort each by effective loft (not name/id).
+  const clubs = orderClubsForChart(enabled);
   return clubs.map((club) => {
     const clubLoft = effectiveClubLoft(club.id, {
       clubLoftOverrides: overrides,
@@ -138,6 +186,10 @@ export function buildChart(opts: {
       label,
       fitOrigin: fit?.origin ?? "model",
       fromClubId: fit?.fromClubId,
+      group: club.group,
+      loft: clubLoft,
+      isCustom: club.isCustom,
+      name: club.name,
     };
   });
 }

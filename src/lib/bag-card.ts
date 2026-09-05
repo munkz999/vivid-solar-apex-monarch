@@ -1,4 +1,4 @@
-import type { ChartRow } from "./chart";
+import { chartSections, type ChartRow } from "./chart";
 
 const W = 1200;
 const H = 1800;
@@ -110,7 +110,11 @@ function drawBagCard(ctx: CanvasRenderingContext2D, rows: ChartRow[], meta: BagC
   const tableTop = top + 28;
   const headerH = 44;
   const tableH = footerY - 40 - tableTop - headerH;
-  const rowH = rows.length === 0 ? tableH : tableH / Math.max(rows.length, 1);
+  const sections = chartSections(rows);
+  // Club rows + one slot per section header so PNG matches the Chart card.
+  const slotCount =
+    rows.length === 0 ? 1 : rows.length + sections.length;
+  const rowH = tableH / Math.max(slotCount, 1);
 
   ctx.fillStyle = FAINT;
   ctx.font = "600 22px Figtree, sans-serif";
@@ -126,25 +130,35 @@ function drawBagCard(ctx: CanvasRenderingContext2D, rows: ChartRow[], meta: BagC
     ctx.textAlign = "center";
     ctx.fillText("Turn on clubs in Bag", W / 2, tableTop + tableH / 2);
   } else {
-    rows.forEach((row, i) => {
-      const y = tableTop + headerH + rowH * i + rowH * 0.68;
-      ctx.fillStyle = INK;
-      ctx.font = "600 40px Figtree, sans-serif";
+    let slot = 0;
+    for (const section of sections) {
+      const hy = tableTop + headerH + rowH * slot + rowH * 0.62;
+      ctx.fillStyle = FAINT;
+      ctx.font = "600 20px Figtree, sans-serif";
       ctx.textAlign = "left";
-      ctx.fillText(row.label, 110, y);
-      if (row.isYours) {
-        const tw = ctx.measureText(row.label).width;
+      ctx.fillText(section.label.toUpperCase(), 110, hy);
+      slot += 1;
+      for (const row of section.rows) {
+        const y = tableTop + headerH + rowH * slot + rowH * 0.68;
+        ctx.fillStyle = INK;
+        ctx.font = "600 40px Figtree, sans-serif";
+        ctx.textAlign = "left";
+        ctx.fillText(row.label, 110, y);
+        if (row.isYours) {
+          const tw = ctx.measureText(row.label).width;
+          ctx.fillStyle = GOLD;
+          ctx.font = "700 18px Figtree, sans-serif";
+          ctx.fillText("YOURS", 110 + tw + 16, y - 4);
+        }
         ctx.fillStyle = GOLD;
-        ctx.font = "700 18px Figtree, sans-serif";
-        ctx.fillText("YOURS", 110 + tw + 16, y - 4);
+        ctx.font = "600 48px Figtree, sans-serif";
+        ctx.textAlign = "right";
+        ctx.fillText(String(Math.round(row.carry)), W - 320, y);
+        ctx.fillStyle = INK;
+        ctx.fillText(String(Math.round(row.total)), W - 110, y);
+        slot += 1;
       }
-      ctx.fillStyle = GOLD;
-      ctx.font = "600 48px Figtree, sans-serif";
-      ctx.textAlign = "right";
-      ctx.fillText(String(Math.round(row.carry)), W - 320, y);
-      ctx.fillStyle = INK;
-      ctx.fillText(String(Math.round(row.total)), W - 110, y);
-    });
+    }
   }
 
   ctx.strokeStyle = "rgba(244,236,214,0.16)";

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Printer, Share } from "lucide-react";
 import { weatherMultiplier } from "@/lib/model";
-import { buildChart, fmtYd, loftLabel, roundConditions } from "@/lib/chart";
+import { buildChart, chartSections, fmtYd, loftLabel, roundConditions } from "@/lib/chart";
 import { saveBagCardPng } from "@/lib/bag-card";
 import { currentMph, presetLabel, useBagStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -108,30 +108,46 @@ export function ChartTab() {
         {rows.length === 0 ? (
           <p className="py-10 text-center text-sm text-muted">Turn on clubs in Bag first.</p>
         ) : (
-          <ul>
-            {rows.map((row, i) => (
-              <li
-                key={row.clubId}
-                className={cn(
-                  "grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem] items-center gap-2 py-2",
-                  i < rows.length - 1 && "border-b border-line",
-                )}
-              >
-                <div className="flex min-w-0 items-baseline gap-1.5">
-                  <span className="font-semibold tracking-tight">{row.label}</span>
-                  {row.isYours ? (
-                    <span className="text-2xs font-semibold tracking-wide text-gold uppercase">
-                      Yours
-                    </span>
-                  ) : null}
-                </div>
-                <span className="text-right text-lg font-semibold text-gold tabular-nums">
-                  {fmtYd(row.carry)}
-                </span>
-                <span className="text-right text-lg font-semibold tabular-nums">{fmtYd(row.total)}</span>
-              </li>
+          <div>
+            {chartSections(rows).map((section, si) => (
+              <div key={section.id} className={cn(si > 0 && "mt-1")}>
+                <h4
+                  className={cn(
+                    "pt-2.5 pb-1 text-2xs font-medium tracking-widest text-faint uppercase",
+                    si > 0 && "mt-1 border-t border-line",
+                  )}
+                >
+                  {section.label}
+                </h4>
+                <ul>
+                  {section.rows.map((row, i) => (
+                    <li
+                      key={row.clubId}
+                      className={cn(
+                        "grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem] items-center gap-2 py-2",
+                        i < section.rows.length - 1 && "border-b border-line",
+                      )}
+                    >
+                      <div className="flex min-w-0 items-baseline gap-1.5">
+                        <span className="font-semibold tracking-tight">{row.label}</span>
+                        {row.isYours ? (
+                          <span className="text-2xs font-semibold tracking-wide text-gold uppercase">
+                            Yours
+                          </span>
+                        ) : null}
+                      </div>
+                      <span className="text-right text-lg font-semibold text-gold tabular-nums">
+                        {fmtYd(row.carry)}
+                      </span>
+                      <span className="text-right text-lg font-semibold tabular-nums">
+                        {fmtYd(row.total)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
 
         <p className="mt-4 border-t border-line pt-3 text-center text-2xs tracking-wide text-faint uppercase">
