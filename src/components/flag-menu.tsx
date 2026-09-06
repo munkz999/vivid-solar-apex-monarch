@@ -200,7 +200,8 @@ function InstructionsBody() {
         <h3 className="font-medium text-ink">Pro · Custom chart</h3>
         <p className="mt-1">
           Unlock Pro (one-time) for <span className="text-ink">Custom</span>,{" "}
-          <span className="text-ink">Log</span>, and <span className="text-ink">Conditions</span>.
+          <span className="text-ink">Log</span>, <span className="text-ink">Conditions</span>, and Chart{" "}
+          <span className="text-ink">Print / Share / Save</span>.
           Custom builds a personal chart from your speed and logged shots.
         </p>
       </section>
@@ -231,7 +232,7 @@ function InstructionsBody() {
         <h3 className="font-medium text-ink">Tabs</h3>
         <ul className="mt-1 list-disc space-y-1.5 pl-5">
           <li>
-            <span className="text-ink">Chart</span> — your bag card; Print / Share / Save for the course.
+            <span className="text-ink">Chart</span> — your bag card; Print / Share / Save for the course (Pro).
           </li>
           <li>
             <span className="text-ink">Bag</span> — which clubs are in play, per-club lofts (driver uses a simple menu), Adjust with a confirm warning, Reset to standards, and custom clubs.
@@ -271,7 +272,7 @@ function FaqBody() {
     },
     {
       q: "What does Unlock Pro include?",
-      a: "A one-time unlock for Custom speed, Log, and Conditions. Use Restore purchase on the paywall if you already bought it on this Apple ID.",
+      a: "A one-time unlock for Custom speed, Log, Conditions, and Chart Print / Share / Save. Use Restore purchase on the paywall if you already bought it on this Apple ID.",
     },
     {
       q: "What do High / Mid / Low mean?",

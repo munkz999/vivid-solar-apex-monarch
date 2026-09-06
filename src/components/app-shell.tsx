@@ -40,7 +40,7 @@ export function AppShell() {
   const longPressFired = useRef(false);
   const titleTapCount = useRef(0);
   const titleTapTimer = useRef<number | undefined>(undefined);
-  const [paywallFor, setPaywallFor] = useState<TabId | "fit" | null>(null);
+  const [paywallFor, setPaywallFor] = useState<TabId | "fit" | "export" | null>(null);
   const [devToast, setDevToast] = useState<string | null>(null);
   const [flagSheet, setFlagSheet] = useState<FlagSheet>(null);
 
@@ -96,7 +96,8 @@ export function AppShell() {
     const next = paywallFor;
     setPaywallFor(null);
     if (next === "fit") setPreset("fit");
-    else if (next) setTab(next);
+    else if (next === "benchmark" || next === "round") setTab(next);
+    // "export": stay on Chart after unlock
   }
 
   function toggleDemoPro() {
@@ -229,7 +230,7 @@ export function AppShell() {
           ref={mainRef}
           className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-4 pb-5 print:overflow-visible print:pt-0"
         >
-          {tab === "chart" ? <ChartTab /> : null}
+          {tab === "chart" ? <ChartTab onRequestUnlock={() => setPaywallFor("export")} /> : null}
           {tab === "bag" ? <BagTab /> : null}
           {tab === "benchmark" && unlocked ? <BenchmarkTab /> : null}
           {tab === "round" && unlocked ? <RoundTab /> : null}
@@ -308,6 +309,7 @@ export function AppShell() {
               <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-muted">
                 <li>log your swing metrics or known club swing speed to build and fine tune your distance chart</li>
                 <li>apply real-time weather conditions to your chart based on your location, further refining your chart by considering environmental factors affecting ball flight</li>
+                <li>print, share, or save your chart image for the course (Print / Share / Save)</li>
               </ul>
               <PrimaryButton className="mt-5" onClick={confirmUnlock}>
                 Unlock · $4.99

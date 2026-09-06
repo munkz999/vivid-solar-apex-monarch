@@ -1,13 +1,18 @@
 import { useState } from "react";
-import { Share } from "lucide-react";
+import { Lock, Share } from "lucide-react";
 import { weatherMultiplier } from "@/lib/model";
 import { buildChart, fmtYd, loftLabel, roundConditions } from "@/lib/chart";
 import { saveBagCardPng } from "@/lib/bag-card";
 import { currentMph, presetLabel, useBagStore } from "@/lib/store";
+import { useUnlock } from "@/lib/unlock";
 import { cn } from "@/lib/utils";
 import { PrimaryButton } from "./ui";
 
-export function ChartTab() {
+type ChartTabProps = {
+  onRequestUnlock?: () => void;
+};
+
+export function ChartTab({ onRequestUnlock }: ChartTabProps) {
   const enabledClubs = useBagStore((s) => s.enabledClubs);
   const customClubs = useBagStore((s) => s.customClubs);
   const driverLoft = useBagStore((s) => s.driverLoft);
@@ -23,6 +28,7 @@ export function ChartTab() {
 
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const unlocked = useUnlock();
 
   const conditions = roundConditions({
     useConditions,
@@ -146,9 +152,19 @@ export function ChartTab() {
         <PrimaryButton
           className="w-full"
           disabled={rows.length === 0 || busy}
-          onClick={onShareSave}
+          onClick={() => {
+            if (!unlocked) {
+              onRequestUnlock?.();
+              return;
+            }
+            void onShareSave();
+          }}
         >
-          <Share className="mr-2 size-4" strokeWidth={2} />
+          {unlocked ? (
+            <Share className="mr-2 size-4" strokeWidth={2} />
+          ) : (
+            <Lock className="mr-2 size-4" strokeWidth={2} />
+          )}
           {status ?? (busy ? "Saving…" : "Print / Share / Save")}
         </PrimaryButton>
       </div>
