@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { submitFeedbackEmail } from "@/lib/feedback";
 import { Field, GhostButton, Pill, PrimaryButton } from "./ui";
 
 export type FlagSheet = "menu" | "feedback" | "instructions" | "faq" | null;
@@ -83,25 +84,44 @@ function FeedbackForm({
   const [category, setCategory] = useState<FeedbackCat>("general");
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState<string | null>(null);
-  const canSend = message.trim().length >= 3;
+  const [error, setError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const canSend = message.trim().length >= 3 && !sending;
 
-  function submit() {
+  async function submit() {
     if (!canSend) return;
-    const entry = { category, message: message.trim(), at: Date.now() };
-    storeFeedbackLocally(entry);
-    console.info("[bag-chart feedback]", entry);
-    setStatus("Thanks — your feedback was saved on this device. We’ll review it soon.");
-    window.setTimeout(
-      () => onDone("Thanks — your feedback was saved on this device. We’ll review it soon."),
-      700,
-    );
+    const trimmed = message.trim();
+    const at = Date.now();
+    const catMeta = FEEDBACK_CATS.find((c) => c.id === category) ?? FEEDBACK_CATS[3];
+    const entry = { category, message: trimmed, at };
+    setError(null);
+    setStatus(null);
+    setSending(true);
+    try {
+      const result = await submitFeedbackEmail({
+        category,
+        categoryLabel: catMeta.label,
+        message: trimmed,
+        at,
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      storeFeedbackLocally(entry);
+      const thanks = "Thanks — your feedback was emailed to the Bag Chart inbox.";
+      setStatus(thanks);
+      window.setTimeout(() => onDone(thanks), 700);
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted">
-        Tell us what’s broken, confusing, or missing. Feedback is saved on this device for now —
-        we’ll add a shared inbox soon.
+        Tell us what’s broken, confusing, or missing. Submit sends your note to the Bag Chart
+        inbox. A short backup is also kept on this device.
       </p>
       <Field label="Category">
         <div className="-mx-1 flex flex-wrap gap-1.5 px-1">
@@ -118,17 +138,19 @@ function FeedbackForm({
           onChange={(e) => setMessage(e.target.value.slice(0, 1200))}
           rows={5}
           placeholder="What happened? What would you change?"
+          disabled={sending}
           className={cn(
             "w-full rounded-md bg-raised px-3.5 py-3 text-base text-ink outline-none shadow-inset",
             "placeholder:text-faint focus:shadow-gold-focus",
           )}
         />
       </Field>
+      {error ? <p className="text-sm text-danger" role="alert">{error}</p> : null}
       {status ? <p className="text-sm text-gold">{status}</p> : null}
-      <PrimaryButton disabled={!canSend} onClick={submit}>
-        Submit
+      <PrimaryButton disabled={!canSend} onClick={() => void submit()}>
+        {sending ? "Sending…" : "Submit"}
       </PrimaryButton>
-      <GhostButton className="w-full" onClick={onBack}>
+      <GhostButton className="w-full" onClick={onBack} disabled={sending}>
         Back
       </GhostButton>
     </div>
@@ -226,7 +248,7 @@ function InstructionsBody() {
         <h3 className="font-medium text-ink">Tips</h3>
         <p className="mt-1">
           Prefer averages from a launch monitor or sim over one lucky range ball. Flag → Submit
-          feedback to report bugs or ideas.
+          feedback to email bugs or ideas to the Bag Chart inbox.
         </p>
       </section>
     </div>
@@ -245,7 +267,7 @@ function FaqBody() {
     },
     {
       q: "How do I submit feedback or report a bug?",
-      a: "Tap the flag (top left) → Submit feedback. Pick a category, write a short note, and Submit. Your note is saved on this device for now — we’ll review it soon.",
+      a: "Tap the flag (top left) → Submit feedback. Pick a category, write a short note, and Submit. Your note is emailed to the Bag Chart inbox (a short backup is also kept on this device).",
     },
     {
       q: "What does Unlock Pro include?",
