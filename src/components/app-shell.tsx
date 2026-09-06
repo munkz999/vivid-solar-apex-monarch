@@ -81,8 +81,16 @@ export function AppShell() {
     setTab(id);
   }
 
+  function flashToast(msg: string) {
+    setDevToast(msg);
+    window.setTimeout(() => setDevToast(null), DEV_TOAST_MS);
+  }
+
   function confirmUnlock() {
-    if (requestNativePurchase()) return;
+    if (requestNativePurchase()) {
+      flashToast("Opening App Store…");
+      return;
+    }
     setUnlock(true);
     const next = paywallFor;
     setPaywallFor(null);
@@ -310,7 +318,11 @@ export function AppShell() {
                 type="button"
                 className="mt-3 w-full text-center text-xs text-faint"
                 onClick={() => {
-                  if (!requestNativeRestore()) setUnlock(true);
+                  if (requestNativeRestore()) {
+                    flashToast("Restoring purchase…");
+                    return;
+                  }
+                  setUnlock(true);
                 }}
               >
                 Restore purchase

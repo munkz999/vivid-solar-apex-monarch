@@ -48,7 +48,13 @@ export function ChartTab() {
   const flightPct = conditions ? Math.round(weatherMultiplier(conditions) * 100) : null;
   const yoursCount = rows.filter((r) => r.isYours).length;
   const loft = loftLabel(driverLoft);
-  async function onSave() {
+  function inNativeWebView() {
+    return Boolean(
+      (window as unknown as { ReactNativeWebView?: unknown }).ReactNativeWebView,
+    );
+  }
+
+  async function exportBagCard() {
     if (rows.length === 0 || busy) return;
     setBusy(true);
     setStatus(null);
@@ -68,6 +74,20 @@ export function ChartTab() {
       setBusy(false);
       window.setTimeout(() => setStatus(null), 1800);
     }
+  }
+
+  async function onSave() {
+    await exportBagCard();
+  }
+
+  async function onPrint() {
+    if (rows.length === 0 || busy) return;
+    // WKWebView / TestFlight: window.print() is a no-op — use share/save sheet.
+    if (inNativeWebView() || typeof window.print !== "function") {
+      await exportBagCard();
+      return;
+    }
+    window.print();
   }
 
   return (
@@ -144,8 +164,8 @@ export function ChartTab() {
       <div className="no-print grid grid-cols-2 gap-2">
         <GhostButton
           className="w-full"
-          disabled={rows.length === 0}
-          onClick={() => window.print()}
+          disabled={rows.length === 0 || busy}
+          onClick={onPrint}
         >
           <Printer className="mr-2 size-4" strokeWidth={2} />
           Print
