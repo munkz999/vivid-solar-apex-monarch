@@ -88,6 +88,7 @@ export function AppShell() {
 
   function confirmUnlock() {
     if (requestNativePurchase()) {
+      setPaywallFor(null);
       flashToast("Opening App Store…");
       return;
     }
