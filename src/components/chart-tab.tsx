@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { Printer, Share } from "lucide-react";
+import { Share } from "lucide-react";
 import { weatherMultiplier } from "@/lib/model";
 import { buildChart, fmtYd, loftLabel, roundConditions } from "@/lib/chart";
 import { saveBagCardPng } from "@/lib/bag-card";
 import { currentMph, presetLabel, useBagStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { GhostButton, PrimaryButton } from "./ui";
+import { PrimaryButton } from "./ui";
 
 export function ChartTab() {
   const enabledClubs = useBagStore((s) => s.enabledClubs);
@@ -48,13 +48,8 @@ export function ChartTab() {
   const flightPct = conditions ? Math.round(weatherMultiplier(conditions) * 100) : null;
   const yoursCount = rows.filter((r) => r.isYours).length;
   const loft = loftLabel(driverLoft);
-  function inNativeWebView() {
-    return Boolean(
-      (window as unknown as { ReactNativeWebView?: unknown }).ReactNativeWebView,
-    );
-  }
 
-  async function exportBagCard() {
+  async function onShareSave() {
     if (rows.length === 0 || busy) return;
     setBusy(true);
     setStatus(null);
@@ -76,26 +71,12 @@ export function ChartTab() {
     }
   }
 
-  async function onSave() {
-    await exportBagCard();
-  }
-
-  async function onPrint() {
-    if (rows.length === 0 || busy) return;
-    // WKWebView / TestFlight: window.print() is a no-op — use share/save sheet.
-    if (inNativeWebView() || typeof window.print !== "function") {
-      await exportBagCard();
-      return;
-    }
-    window.print();
-  }
-
   return (
     <div className="flex flex-col gap-4">
       <div className="no-print">
         <h2 className="font-display text-xl font-medium tracking-tight">Chart</h2>
         <p className="text-sm text-muted">
-          Your bag distances — print or save for the course.
+          Your bag distances — print, share, or save for the course.
         </p>
       </div>
 
@@ -161,18 +142,14 @@ export function ChartTab() {
         </p>
       </div>
 
-      <div className="no-print grid grid-cols-2 gap-2">
-        <GhostButton
+      <div className="no-print">
+        <PrimaryButton
           className="w-full"
           disabled={rows.length === 0 || busy}
-          onClick={onPrint}
+          onClick={onShareSave}
         >
-          <Printer className="mr-2 size-4" strokeWidth={2} />
-          Print
-        </GhostButton>
-        <PrimaryButton disabled={rows.length === 0 || busy} onClick={onSave}>
           <Share className="mr-2 size-4" strokeWidth={2} />
-          {status ?? (busy ? "Saving…" : "Save image")}
+          {status ?? (busy ? "Saving…" : "Print / Share / Save")}
         </PrimaryButton>
       </div>
 

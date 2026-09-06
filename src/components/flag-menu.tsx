@@ -231,7 +231,7 @@ function InstructionsBody() {
         <h3 className="font-medium text-ink">Tabs</h3>
         <ul className="mt-1 list-disc space-y-1.5 pl-5">
           <li>
-            <span className="text-ink">Chart</span> — your bag card; print or save an image for the course.
+            <span className="text-ink">Chart</span> — your bag card; Print / Share / Save for the course.
           </li>
           <li>
             <span className="text-ink">Bag</span> — which clubs are in play, per-club lofts (driver uses a simple menu), Adjust with a confirm warning, Reset to standards, and custom clubs.
