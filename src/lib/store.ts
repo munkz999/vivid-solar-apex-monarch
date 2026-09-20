@@ -20,7 +20,7 @@ import {
 } from "./clubs";
 import { clubRoll, fittedMph, modelCarryRaw, type WindDir } from "./model";
 
-export type TabId = "chart" | "bag" | "benchmark" | "round";
+export type TabId = "chart" | "bag" | "caddy" | "benchmark" | "round";
 export type SpeedPreset = "sr" | "slow" | "avg" | "pro" | "fit";
 export type Gender = "men" | "women";
 export type Source = "sim" | "course" | "range";
