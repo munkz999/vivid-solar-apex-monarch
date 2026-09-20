@@ -11,7 +11,7 @@ import {
 import { buildChart, roundConditions } from "@/lib/chart";
 import { currentMph, useBagStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { Field, GhostButton, Panel, Pill, PrimaryButton, Switch, TextInput } from "./ui";
+import { Field, GhostButton, Panel, Pill, PrimaryButton, StepperButton, Switch, TextInput } from "./ui";
 
 const LIE_TYPES: LieType[] = ["fairway", "rough", "bunker"];
 const QUALITIES: LieQuality[] = ["favorable", "buried"];
@@ -76,6 +76,19 @@ export function CaddyTab() {
   function onLieType(next: LieType) {
     setLieType(next);
     if (next === "fairway") setLieQuality("favorable");
+  }
+
+  const elevMagValue = (() => {
+    const mag = Number.parseFloat(elevMagText);
+    return Number.isFinite(mag) && mag >= 0 ? mag : 0;
+  })();
+
+  /** Magnitude only; direction (+/−) is separate. Clamp at 0 — never negative yards. */
+  function bumpElevMag(delta: number) {
+    const parsed = Number.parseFloat(elevMagText);
+    const current = Number.isFinite(parsed) ? Math.max(0, Math.round(parsed)) : 0;
+    const next = Math.max(0, Math.min(200, current + delta));
+    setElevMagText(String(next));
   }
 
   function recommend() {
@@ -236,14 +249,30 @@ export function CaddyTab() {
                 ))}
               </div>
               {elevSign !== "flat" ? (
-                <TextInput
-                  className="mt-2"
-                  inputMode="decimal"
-                  placeholder="Elevation yards"
-                  value={elevMagText}
-                  onChange={(e) => setElevMagText(e.target.value)}
-                  aria-label="Elevation magnitude in yards"
-                />
+                <div className="mt-2 flex items-center justify-center gap-2">
+                  <StepperButton
+                    aria-label="Decrease elevation by 1 yard"
+                    disabled={elevMagValue <= 0}
+                    onClick={() => bumpElevMag(-1)}
+                  >
+                    −
+                  </StepperButton>
+                  <TextInput
+                    className="w-[5.5rem] shrink-0 px-2 text-center tabular-nums"
+                    inputMode="decimal"
+                    placeholder="yd"
+                    value={elevMagText}
+                    onChange={(e) => setElevMagText(e.target.value)}
+                    aria-label="Elevation magnitude in yards"
+                  />
+                  <StepperButton
+                    aria-label="Increase elevation by 1 yard"
+                    disabled={elevMagValue >= 200}
+                    onClick={() => bumpElevMag(1)}
+                  >
+                    +
+                  </StepperButton>
+                </div>
               ) : null}
             </Field>
           </Panel>
