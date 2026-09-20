@@ -1,4 +1,4 @@
-import { CloudSun, Crosshair, Flag, LayoutList, Briefcase, Lock } from "lucide-react";
+import { CloudSun, Crosshair, Flag, LayoutList, Briefcase, Lock, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { bagClubList } from "@/lib/clubs";
 import { currentMph, SPEED_PRESETS, useBagStore, type Gender, type TabId } from "@/lib/store";
@@ -6,6 +6,7 @@ import { isProTab, requestNativePurchase, requestNativeRestore, setUnlock, useNa
 import { cn } from "@/lib/utils";
 import { GhostButton, Pill, PrimaryButton } from "./ui";
 import { ChartTab } from "./chart-tab";
+import { CaddyTab } from "./caddy-tab";
 import { BagTab } from "./bag-tab";
 import { BenchmarkTab } from "./benchmark-tab";
 import { RoundTab } from "./round-tab";
@@ -15,6 +16,7 @@ import { FlagMenuSheets, type FlagSheet } from "./flag-menu";
 const TABS: { id: TabId; label: string; icon: typeof LayoutList }[] = [
   { id: "chart", label: "Chart", icon: LayoutList },
   { id: "bag", label: "Bag", icon: Briefcase },
+  { id: "caddy", label: "Caddy", icon: Sparkles },
   { id: "benchmark", label: "Log", icon: Crosshair },
   { id: "round", label: "Conditions", icon: CloudSun },
 ];
@@ -96,7 +98,7 @@ export function AppShell() {
     const next = paywallFor;
     setPaywallFor(null);
     if (next === "fit") setPreset("fit");
-    else if (next === "benchmark" || next === "round") setTab(next);
+    else if (next === "caddy" || next === "benchmark" || next === "round") setTab(next);
     // "export": stay on Chart after unlock
   }
 
@@ -232,6 +234,7 @@ export function AppShell() {
         >
           {tab === "chart" ? <ChartTab onRequestUnlock={() => setPaywallFor("export")} /> : null}
           {tab === "bag" ? <BagTab /> : null}
+          {tab === "caddy" && unlocked ? <CaddyTab /> : null}
           {tab === "benchmark" && unlocked ? <BenchmarkTab /> : null}
           {tab === "round" && unlocked ? <RoundTab /> : null}
         </main>
@@ -241,7 +244,7 @@ export function AppShell() {
           aria-label="Primary"
         >
           <CourseStingButton />
-          <ul className="grid min-w-0 flex-1 grid-cols-4">
+          <ul className="grid min-w-0 flex-1 grid-cols-5">
             {TABS.map((t) => {
               const Icon = t.icon;
               const on = tab === t.id;
@@ -309,6 +312,7 @@ export function AppShell() {
               <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-muted">
                 <li>log your swing metrics or known club swing speed to build and fine tune your distance chart</li>
                 <li>apply real-time weather conditions to your chart based on your location, further refining your chart by considering environmental factors affecting ball flight</li>
+                <li>use Caddy for club recommendations based on lie, elevation, and conditions</li>
                 <li>print, share, or save your chart image for the course (Print / Share / Save)</li>
               </ul>
               <PrimaryButton className="mt-5" onClick={confirmUnlock}>

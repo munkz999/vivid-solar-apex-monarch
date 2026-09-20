@@ -200,7 +200,8 @@ function InstructionsBody() {
         <h3 className="font-medium text-ink">Pro · Custom chart</h3>
         <p className="mt-1">
           Unlock Pro (one-time) for <span className="text-ink">Custom</span>,{" "}
-          <span className="text-ink">Log</span>, <span className="text-ink">Conditions</span>, and Chart{" "}
+          <span className="text-ink">Log</span>, <span className="text-ink">Conditions</span>,{" "}
+          <span className="text-ink">Caddy</span> club picks from lie and conditions, and Chart{" "}
           <span className="text-ink">Print / Share / Save</span>.
           Custom builds a personal chart from your speed and logged shots.
         </p>
@@ -223,7 +224,7 @@ function InstructionsBody() {
       <section>
         <h3 className="font-medium text-ink">Conditions (weather)</h3>
         <p className="mt-1">
-          When Conditions is on, Chart and Log overlay elevation, temperature, humidity, pressure, and
+          When Conditions is on, Chart, Log, and Caddy overlay elevation, temperature, humidity, pressure, and
           wind on ball flight. Location fills in automatically when allowed; search a course, city,
           zip, or address to override.
         </p>
@@ -236,6 +237,9 @@ function InstructionsBody() {
           </li>
           <li>
             <span className="text-ink">Bag</span> — which clubs are in play, per-club lofts (driver uses a simple menu), Adjust with a confirm warning, Reset to standards, and custom clubs.
+          </li>
+          <li>
+            <span className="text-ink">Caddy</span> — one-shot club picks from lie, elevation, and conditions (Pro).
           </li>
           <li>
             <span className="text-ink">Log</span> — swing speed and benchmark shots (Pro).
@@ -272,7 +276,7 @@ function FaqBody() {
     },
     {
       q: "What does Unlock Pro include?",
-      a: "A one-time unlock for Custom speed, Log, Conditions, and Chart Print / Share / Save. Use Restore purchase on the paywall if you already bought it on this Apple ID.",
+      a: "A one-time unlock for Custom speed, Log, Conditions, Caddy club recommendations (lie, elevation, and conditions), and Chart Print / Share / Save. Use Restore purchase on the paywall if you already bought it on this Apple ID.",
     },
     {
       q: "What do High / Mid / Low mean?",

@@ -3,7 +3,7 @@ import { useEffect, useSyncExternalStore } from "react";
 export const UNLOCK_STORAGE_KEY = "bagchart.pro";
 export const IAP_PRODUCT_ID = "com.texastyler.bagchart.pro";
 
-const PRO_TAB_IDS = new Set(["benchmark", "round"]);
+const PRO_TAB_IDS = new Set(["caddy", "benchmark", "round"]);
 
 const listeners = new Set<() => void>();
 let cached: boolean | null = null;
