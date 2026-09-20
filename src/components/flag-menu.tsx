@@ -230,6 +230,18 @@ function InstructionsBody() {
         </p>
       </section>
       <section>
+        <h3 className="font-medium text-ink">Caddy</h3>
+        <p className="mt-1">
+          Pro. One-shot club recommendation from your Chart distances. Set{" "}
+          <span className="text-ink">lie</span> (Fairway / Rough / Bunker) and{" "}
+          <span className="text-ink">Favorable</span> / <span className="text-ink">Buried</span>, enter pin
+          yards, and set elevation (<span className="text-ink">Flat</span>, or{" "}
+          <span className="text-ink">Uphill</span> / <span className="text-ink">Downhill</span> with the ±
+          steppers). Toggle <span className="text-ink">Use Conditions</span> if you want weather on the pick,
+          then tap <span className="text-ink">Recommend</span> for a plays-like breakdown.
+        </p>
+      </section>
+      <section>
         <h3 className="font-medium text-ink">Tabs</h3>
         <ul className="mt-1 list-disc space-y-1.5 pl-5">
           <li>
@@ -239,7 +251,7 @@ function InstructionsBody() {
             <span className="text-ink">Bag</span> — which clubs are in play, per-club lofts (driver uses a simple menu), Adjust with a confirm warning, Reset to standards, and custom clubs.
           </li>
           <li>
-            <span className="text-ink">Caddy</span> — one-shot club picks from lie, elevation, and conditions (Pro).
+            <span className="text-ink">Caddy</span> — one-shot club picks from Chart distances, lie (Favorable/Buried), pin, elevation, and optional Conditions (Pro).
           </li>
           <li>
             <span className="text-ink">Log</span> — swing speed and benchmark shots (Pro).
@@ -277,6 +289,14 @@ function FaqBody() {
     {
       q: "What does Unlock Pro include?",
       a: "A one-time unlock for Custom speed, Log, Conditions, Caddy club recommendations (lie, elevation, and conditions), and Chart Print / Share / Save. Use Restore purchase on the paywall if you already bought it on this Apple ID.",
+    },
+    {
+      q: "What does Caddy do?",
+      a: "One-shot club recommendation from your Chart distances. Set lie (Fairway / Rough / Bunker plus Favorable or Buried), pin yards, and elevation; optionally Use Conditions for weather. You get a plays-like breakdown and the club to pull.",
+    },
+    {
+      q: "How do I use Caddy?",
+      a: "Open the Caddy tab → set lie and Favorable/Buried → enter pin yards → set elevation (Flat, or Uphill/Downhill with the ± steppers) → toggle Use Conditions if you want weather on the pick → Recommend. Pro Unlock is required (the tab stays visible; locked users hit the paywall).",
     },
     {
       q: "What do High / Mid / Low mean?",
