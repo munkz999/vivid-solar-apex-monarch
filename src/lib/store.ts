@@ -91,6 +91,8 @@ interface BagState {
   clubLoftOverrides: Record<string, number>;
   benchmarks: Benchmark[];
   useConditions: boolean;
+  /** Caddy tab: apply Conditions/weather to chart distances for club pick. Default on. */
+  caddyUseConditions: boolean;
   weather: WeatherState | null;
   windDir: WindDir;
   windMph: number;
@@ -121,6 +123,7 @@ interface BagState {
   deleteBenchmark: (id: string) => void;
   clearBenchmarks: () => void;
   setUseConditions: (on: boolean) => void;
+  setCaddyUseConditions: (on: boolean) => void;
   setWeather: (w: WeatherState | null) => void;
   patchWeather: (p: Partial<WeatherState>) => void;
   setWindDir: (d: WindDir) => void;
@@ -214,6 +217,7 @@ export const useBagStore = create<BagState>()(
       clubLoftOverrides: {},
       benchmarks: [],
       useConditions: false,
+      caddyUseConditions: true,
       weather: null,
       windDir: "ignore",
       windMph: 0,
@@ -412,6 +416,7 @@ export const useBagStore = create<BagState>()(
           fitDraft: { ...get().fitDraft, carry: "", total: "" },
         }),
       setUseConditions: (on) => set({ useConditions: on }),
+      setCaddyUseConditions: (on) => set({ caddyUseConditions: on }),
       setWeather: (w) => set({ weather: w }),
       patchWeather: (p) => {
         const cur = get().weather ?? {
@@ -460,6 +465,7 @@ export const useBagStore = create<BagState>()(
         clubLoftOverrides: s.clubLoftOverrides,
         benchmarks: s.benchmarks,
         useConditions: s.useConditions,
+        caddyUseConditions: s.caddyUseConditions,
         weather: s.weather,
         windDir: s.windDir,
         windMph: s.windMph,
