@@ -98,7 +98,7 @@ export function AppShell() {
     const next = paywallFor;
     setPaywallFor(null);
     if (next === "fit") setPreset("fit");
-    else if (next === "benchmark" || next === "round") setTab(next);
+    else if (next === "caddy" || next === "benchmark" || next === "round") setTab(next);
     // "export": stay on Chart after unlock
   }
 
@@ -234,7 +234,7 @@ export function AppShell() {
         >
           {tab === "chart" ? <ChartTab onRequestUnlock={() => setPaywallFor("export")} /> : null}
           {tab === "bag" ? <BagTab /> : null}
-          {tab === "caddy" ? <CaddyTab /> : null}
+          {tab === "caddy" && unlocked ? <CaddyTab /> : null}
           {tab === "benchmark" && unlocked ? <BenchmarkTab /> : null}
           {tab === "round" && unlocked ? <RoundTab /> : null}
         </main>
@@ -312,6 +312,7 @@ export function AppShell() {
               <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-muted">
                 <li>log your swing metrics or known club swing speed to build and fine tune your distance chart</li>
                 <li>apply real-time weather conditions to your chart based on your location, further refining your chart by considering environmental factors affecting ball flight</li>
+                <li>use Caddy for club recommendations based on lie, elevation, and conditions</li>
                 <li>print, share, or save your chart image for the course (Print / Share / Save)</li>
               </ul>
               <PrimaryButton className="mt-5" onClick={confirmUnlock}>
