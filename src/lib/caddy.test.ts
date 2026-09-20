@@ -41,6 +41,18 @@ describe("playsLike", () => {
     });
     assert.equal(r.playsLikeYards, 148);
   });
+
+  it("does not bake weather — chart rows carry Conditions when Caddy toggle is on", () => {
+    // playsLike is lie + elevation only; weather is applied via buildChart/roundConditions
+    // gated by store.caddyUseConditions in CaddyTab (not global useConditions).
+    const r = playsLike({
+      pinYards: 150,
+      lieType: "fairway",
+      lieQuality: "favorable",
+      elevationYards: 5,
+    });
+    assert.equal(r.playsLikeYards, 155);
+  });
 });
 
 describe("pickClub", () => {

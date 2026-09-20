@@ -11,7 +11,7 @@ import {
 import { buildChart, roundConditions } from "@/lib/chart";
 import { currentMph, useBagStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import { Field, GhostButton, Panel, Pill, PrimaryButton, TextInput } from "./ui";
+import { Field, GhostButton, Panel, Pill, PrimaryButton, Switch, TextInput } from "./ui";
 
 const LIE_TYPES: LieType[] = ["fairway", "rough", "bunker"];
 const QUALITIES: LieQuality[] = ["favorable", "buried"];
@@ -24,7 +24,8 @@ export function CaddyTab() {
   const driverLoft = useBagStore((s) => s.driverLoft);
   const clubLoftOverrides = useBagStore((s) => s.clubLoftOverrides);
   const benchmarks = useBagStore((s) => s.benchmarks);
-  const useConditions = useBagStore((s) => s.useConditions);
+  const caddyUseConditions = useBagStore((s) => s.caddyUseConditions);
+  const setCaddyUseConditions = useBagStore((s) => s.setCaddyUseConditions);
   const weather = useBagStore((s) => s.weather);
   const windDir = useBagStore((s) => s.windDir);
   const windMph = useBagStore((s) => s.windMph);
@@ -45,8 +46,10 @@ export function CaddyTab() {
     weatherOn: boolean;
   } | null>(null);
 
+  // Caddy-local toggle (independent of Chart/Log “Use conditions this round”).
+  // When on: bake store weather into chart rows (same elev/temp/humidity/pressure/wind path).
   const conditions = roundConditions({
-    useConditions,
+    useConditions: caddyUseConditions,
     elevFt: weather?.elevFt ?? 0,
     tempF: weather?.tempF ?? 70,
     humidityPct: weather?.humidityPct,
@@ -106,7 +109,7 @@ export function CaddyTab() {
       playsLikeYards: pl.playsLikeYards,
       pinYards: pl.pinYards,
       lieFactor: pl.lieFactor,
-      weatherOn: Boolean(useConditions && conditions),
+      weatherOn: Boolean(caddyUseConditions && conditions),
     });
   }
 
@@ -129,7 +132,7 @@ export function CaddyTab() {
       <div>
         <h2 className="font-display text-xl font-medium tracking-tight">Caddy</h2>
         <p className="text-sm text-muted">
-          One-shot club pick from your Chart — lie, elevation, and conditions when on.
+          One-shot club pick from your Chart — lie, elevation, and Conditions when on.
         </p>
       </div>
 
@@ -151,6 +154,20 @@ export function CaddyTab() {
         </Panel>
       ) : (
         <>
+          <Panel className="flex items-center justify-between gap-3">
+            <div>
+              <div className="font-medium">Use Conditions</div>
+              <div className="text-xs text-muted">
+                Weather from your location (or current Conditions settings)
+              </div>
+            </div>
+            <Switch
+              checked={caddyUseConditions}
+              onChange={setCaddyUseConditions}
+              label="Use Conditions"
+            />
+          </Panel>
+
           <Panel className="flex flex-col gap-4">
             <Field label="Lie">
               <div className="grid grid-cols-3 gap-1.5">
@@ -244,10 +261,10 @@ export function CaddyTab() {
           <p
             className={cn(
               "px-1 text-center text-xs text-faint",
-              useConditions && conditions ? "text-muted" : "",
+              caddyUseConditions && conditions ? "text-muted" : "",
             )}
           >
-            {useConditions && conditions
+            {caddyUseConditions && conditions
               ? `Using Chart with conditions${weather?.place ? ` · ${weather.place}` : ""}`
               : "Using Chart distances (conditions off)"}
           </p>
